@@ -32,6 +32,9 @@ from nmpc_tilt_mt.tilt_qd.tilt_qd_thrust import NMPCTiltQdThrust
 # - Consider the servo & thrust delay with its models
 from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust import NMPCTiltQdServoThrust
 from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust_dist import NMPCTiltQdServoThrustDist
+from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust_dist_differential import (
+    NMPCTiltQdServoThrustDistDiff,
+)
 from nmpc_tilt_mt.archive.tilt_qd_servo_thrust_drag import NMPCTiltQdServoThrustDrag
 
 # Birotor
@@ -60,6 +63,8 @@ def main(args):
             nmpc = NMPCTiltQdServoDist(phys=phys_omni)
         elif args.model == 22:
             nmpc = NMPCTiltQdServoThrustDist(phys=phys_omni)
+        elif args.model == 23:
+            nmpc = NMPCTiltQdServoThrustDistDiff(phys=phys_omni)
 
         # Archived methods
         elif args.model == 91:
@@ -123,9 +128,13 @@ def main(args):
     if args.arch == "qd":
         sim_phy = phys_omni if 20 < args.model < 30 else phys_art
         if args.sim_model == 0:
-            sim_nmpc = NMPCTiltQdServoThrust(phys=sim_phy)  # Consider both the servo delay and the thrust delay
+            sim_nmpc = NMPCTiltQdServoThrust(
+                phys=sim_phy
+            )  # Consider both the servo delay and the thrust delay
         elif args.sim_model == 1:
-            sim_nmpc = NMPCTiltQdServoThrustDrag(phys=sim_phy)  # Also consider drag in wrench formulation
+            sim_nmpc = NMPCTiltQdServoThrustDrag(
+                phys=sim_phy
+            )  # Also consider drag in wrench formulation
         else:
             raise ValueError(f"Invalid sim model {args.sim_model}.")
 
@@ -210,7 +219,9 @@ def main(args):
             x_now = np.zeros(nx)
             x_now[: nx - 6] = deepcopy(x_now_sim[: nx - 6])
         else:
-            x_now = deepcopy(x_now_sim[:nx])  # The dimension of x_now may be smaller than x_now_sim
+            x_now = deepcopy(
+                x_now_sim[:nx]
+            )  # The dimension of x_now may be smaller than x_now_sim
 
         # Access from less indices
         if (nmpc.include_thrust_model and not nmpc.include_servo_model) and (
@@ -235,9 +246,9 @@ def main(args):
             if 2.0 <= t_now < 6:
                 target_xyz = np.array([[0.3, 0.6, 1.0]]).T
 
-                roll = 30.0 / 180.0 * np.pi
-                pitch = 60.0 / 180.0 * np.pi
-                yaw = 90.0 / 180.0 * np.pi
+                roll = 90.0 / 180.0 * np.pi
+                pitch = 0.0 / 180.0 * np.pi
+                yaw = 20.0 / 180.0 * np.pi
                 target_rpy = np.array([[roll, pitch, yaw]]).T
 
             # if 3.0 <= t_now < 5.5:
@@ -255,7 +266,10 @@ def main(args):
             if t_now >= 6:
                 assert t_sqp_end <= 3.0
                 target_xyz = np.array([[1.0, 1.0, 1.0]]).T
-                target_rpy = np.array([[0.0, 0.0, 0.0]]).T
+                roll = 90.0 / 180.0 * np.pi
+                pitch = 170.0 / 180.0 * np.pi
+                yaw = 20.0 / 180.0 * np.pi
+                target_rpy = np.array([[roll, pitch, yaw]]).T
 
         # Compute reference trajectory from target pose
         xr, ur = reference_generator.compute_trajectory(target_xyz, target_rpy)
@@ -290,20 +304,26 @@ def main(args):
                 ocp_solver.set(j, "yref", yr)
                 quaternion_r = xr[j, 6:10]
                 nmpc.acados_init_p[0:4] = quaternion_r
-                ocp_solver.set(j, "p", nmpc.acados_init_p)  # For nonlinear quaternion error
+                ocp_solver.set(
+                    j, "p", nmpc.acados_init_p
+                )  # For nonlinear quaternion error
 
             # N
             yr = xr[ocp_solver.N, :]
             ocp_solver.set(ocp_solver.N, "yref", yr)  # Final state of x, no u
             quaternion_r = xr[ocp_solver.N, 6:10]
             nmpc.acados_init_p[0:4] = quaternion_r
-            ocp_solver.set(ocp_solver.N, "p", nmpc.acados_init_p)  # For nonlinear quaternion error
+            ocp_solver.set(
+                ocp_solver.N, "p", nmpc.acados_init_p
+            )  # For nonlinear quaternion error
 
             # Compute control feedback and take the first action
             try:
                 u_cmd = ocp_solver.solve_for_x0(x_now)
             except Exception as e:
-                print(f"Round {i}: acados ocp_solver returned status {ocp_solver.status}. Exiting.")
+                print(
+                    f"Round {i}: acados ocp_solver returned status {ocp_solver.status}. Exiting."
+                )
                 break
 
         comp_time_end = time.time()
@@ -312,7 +332,9 @@ def main(args):
         if args.arch == "qd":
             # Use previous servo angle as reference
             if type(nmpc) is NMPCTiltQdNoServoAcCost:
-                nmpc.update_a_prev(u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7))
+                nmpc.update_a_prev(
+                    u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
+                )
 
             # Use servo angle derivative as state and therefore integrate servo angle command
             if nmpc.include_servo_derivative:
@@ -325,7 +347,9 @@ def main(args):
 
         status = sim_solver.solve()
         if status != 0:
-            raise Exception(f"acados integrator returned status {status} in closed loop instance {i}")
+            raise Exception(
+                f"acados integrator returned status {status} in closed loop instance {i}"
+            )
 
         x_now_sim = sim_solver.get("x")
 
@@ -334,7 +358,9 @@ def main(args):
         u_history.append(u_cmd.copy())
 
         # --------- Update visualizer ----------
-        viz.update(i, x_now_sim, u_cmd)  # Note: The recording frequency of u_cmd is the same as ts_sim
+        viz.update(
+            i, x_now_sim, u_cmd
+        )  # Note: The recording frequency of u_cmd is the same as ts_sim
 
     # ========== Visualize ==========
     if not args.no_viz:
@@ -367,7 +393,9 @@ def main(args):
 
 if __name__ == "__main__":
     # Read command line arguments
-    parser = argparse.ArgumentParser(description="Run the simulation of different NMPC models.")
+    parser = argparse.ArgumentParser(
+        description="Run the simulation of different NMPC models."
+    )
     parser.add_argument(
         "model",
         type=int,
@@ -385,7 +413,9 @@ if __name__ == "__main__":
         "--sim_model",
         type=int,
         default=0,
-        help="The simulation model. " "Options: 0 (default: servo+thrust), " "1 (servo+thrust+drag).",
+        help="The simulation model. "
+        "Options: 0 (default: servo+thrust), "
+        "1 (servo+thrust+drag).",
     )
 
     parser.add_argument(
@@ -397,7 +427,11 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-a", "--arch", type=str, default="qd", help="The robot's architecture. Options: bi, tri, qd (default)."
+        "-a",
+        "--arch",
+        type=str,
+        default="qd",
+        help="The robot's architecture. Options: bi, tri, qd (default).",
     )
 
     parser.add_argument(
@@ -407,9 +441,19 @@ if __name__ == "__main__":
         "because plot_type also decides the simulation parameters.",
     )
 
-    parser.add_argument("-s", "--save_data", action="store_true", help="Save simulation x and u data to file")
+    parser.add_argument(
+        "-s",
+        "--save_data",
+        action="store_true",
+        help="Save simulation x and u data to file",
+    )
 
-    parser.add_argument("--file_path", type=str, default=f"../../../../test/data/", help="Path to save the data file")
+    parser.add_argument(
+        "--file_path",
+        type=str,
+        default=f"../../../../test/data/",
+        help="Path to save the data file",
+    )
 
     args = parser.parse_args()
     main(args)
