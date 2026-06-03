@@ -248,7 +248,7 @@ def main(args):
 
                 roll = 90.0 / 180.0 * np.pi
                 pitch = 0.0 / 180.0 * np.pi
-                yaw = 20.0 / 180.0 * np.pi
+                yaw = 0.0 / 180.0 * np.pi
                 target_rpy = np.array([[roll, pitch, yaw]]).T
 
             # if 3.0 <= t_now < 5.5:
@@ -263,12 +263,19 @@ def main(args):
             #     yaw = 0.0 / 180.0 * np.pi
             #     target_rpy = np.array([[roll, pitch, yaw]]).T
 
-            if t_now >= 6:
+            if 6 <= t_now < 10:
                 assert t_sqp_end <= 3.0
-                target_xyz = np.array([[1.0, 1.0, 1.0]]).T
-                roll = 90.0 / 180.0 * np.pi
-                pitch = 170.0 / 180.0 * np.pi
-                yaw = 20.0 / 180.0 * np.pi
+                target_xyz = np.array([[0.3, 0.6, 1.0]]).T
+                roll = 0.0 / 180.0 * np.pi
+                pitch = 90.0 / 180.0 * np.pi
+                yaw = 0.0 / 180.0 * np.pi
+                target_rpy = np.array([[roll, pitch, yaw]]).T
+
+            if t_now >= 10:
+                target_xyz = np.array([[0.3, 0.6, 1.0]]).T
+                roll = 0.0 / 180.0 * np.pi
+                pitch = 180.0 / 180.0 * np.pi
+                yaw = 0.0 / 180.0 * np.pi
                 target_rpy = np.array([[roll, pitch, yaw]]).T
 
         # Compute reference trajectory from target pose
