@@ -388,6 +388,15 @@ class QDNMPCBase(RecedingHorizonBase):
         model.cost_y_expr = ca.vertcat(state_y, control_y)  # NONLINEAR_LS
         model.cost_y_expr_e = state_y_e
 
+        # Print dynamic equations for debugging
+        print("State variables (x):")
+        for i in range(state.size()[0]):
+            print(f"x[{i}]: {state[i]}")
+        print("Dynamic equations (f_expl_expr):")
+        for i in range(ds.size()[0]):
+            print(f"ds[{i}]:\n{ds[i]} = {model.f_expl_expr[i]}")
+
+
         return model
         # fmt: on
 
