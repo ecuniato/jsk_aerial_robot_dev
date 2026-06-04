@@ -21,12 +21,12 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         self.phys = phys
 
         self.tilt = True
-        self.include_servo_model = True
+        self.include_servo_model = False
         self.include_servo_derivative = False
-        self.include_thrust_model = True  # TODO extend to include_thrust_derivative
-        self.include_cog_dist_model = True
+        self.include_thrust_model = False  # TODO extend to include_thrust_derivative
+        self.include_cog_dist_model = False
         self.include_cog_dist_parameter = (
-            True  # TODO seperation between model and parameter necessary?
+            False  # TODO seperation between model and parameter necessary?
         )
         self.include_impedance = False
 
@@ -71,17 +71,17 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
             qe_y + self.qyr,
             qe_z + self.qzr,
             rot_tb @ self.w,
-            self.a_s,
-            self.ft_s,
-            self.fds_w,
-            self.tau_ds_b,
+            # self.a_s,
+            # self.ft_s,
+            # self.fds_w,
+            # self.tau_ds_b,
         )
 
         state_y_e = state_y
 
         control_y = ca.vertcat(
-            self.ft_c - self.ft_s,  # ft_c_ref must be zero!
-            self.a_c - self.a_s     # a_c_ref must be zero!
+            self.ft_c,  # ft_c_ref must be zero!
+            self.a_c,     # a_c_ref must be zero!
         )
 
         return state_y, state_y_e, control_y
@@ -104,34 +104,42 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
                 self.params["Qw_xy"],
                 self.params["Qw_xy"],
                 self.params["Qw_z"],
-                self.params["Qa"],
-                self.params["Qa"],
-                self.params["Qa"],
-                self.params["Qa"],
-                self.params["Qt"],
-                self.params["Qt"],
-                self.params["Qt"],
-                self.params["Qt"],
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                # self.params["Qa"],
+                # self.params["Qa"],
+                # self.params["Qa"],
+                # self.params["Qa"],
+                # self.params["Qt"],
+                # self.params["Qt"],
+                # self.params["Qt"],
+                # self.params["Qt"],
+                # 0,
+                # 0,
+                # 0,
+                # 0,
+                # 0,
+                # 0,
             ]
         )
         print("Q: \n", Q)
 
         R = np.diag(
             [
-                self.params["Rtc_d"],
-                self.params["Rtc_d"],
-                self.params["Rtc_d"],
-                self.params["Rtc_d"],
-                self.params["Rac_d"],
-                self.params["Rac_d"],
-                self.params["Rac_d"],
-                self.params["Rac_d"],
+                # self.params["Rtc_d"],
+                # self.params["Rtc_d"],
+                # self.params["Rtc_d"],
+                # self.params["Rtc_d"],
+                # self.params["Rac_d"],
+                # self.params["Rac_d"],
+                # self.params["Rac_d"],
+                # self.params["Rac_d"],
+                self.params["Rt"],
+                self.params["Rt"],
+                self.params["Rt"],
+                self.params["Rt"],
+                self.params["Rac"],
+                self.params["Rac"],
+                self.params["Rac"],
+                self.params["Rac"],
             ]
         )
         print("R: \n", R)
@@ -169,14 +177,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        xr[:, 13] = a_ref[0]
-        xr[:, 14] = a_ref[1]
-        xr[:, 15] = a_ref[2]
-        xr[:, 16] = a_ref[3]
-        xr[:, 17] = ft_ref[0]
-        xr[:, 18] = ft_ref[1]
-        xr[:, 19] = ft_ref[2]
-        xr[:, 20] = ft_ref[3]
+        # xr[:, 13] = a_ref[0]
+        # xr[:, 14] = a_ref[1]
+        # xr[:, 15] = a_ref[2]
+        # xr[:, 16] = a_ref[3]
+        # xr[:, 17] = ft_ref[0]
+        # xr[:, 18] = ft_ref[1]
+        # xr[:, 19] = ft_ref[2]
+        # xr[:, 20] = ft_ref[3]
 
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
