@@ -30,13 +30,13 @@ controller:
     Qq_z: 600
     Qw_xy: 5
     Qw_z: 5
-    Qa: 1
-    Qt: 1  # t is for thrust
+    Qa: 0
+    Qt: 0  # t is for thrust
     Qfu: 0 # generated body force
     Qtau: 0 # generated body torque
 
-    Rtd_c: 0.01  # thrust rate of change
-    Rad_c: 0.01 # arm angular velocity
+    Rt_c: 0.5  # thrust rate of change
+    Ra_c: 5 # arm angular velocity
 
     is_attitude_ctrl: false
     is_body_rate_ctrl: false

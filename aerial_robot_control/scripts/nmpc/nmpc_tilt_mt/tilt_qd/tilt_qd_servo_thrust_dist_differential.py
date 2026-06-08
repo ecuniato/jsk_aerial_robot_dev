@@ -86,8 +86,8 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         state_y_e = state_y
 
         control_y = ca.vertcat(
-            self.ftd_c,
-            self.ad_c,
+            self.ft_c - self.ft_s,
+            self.a_c - self.a_s,
         )
 
         return state_y, state_y_e, control_y
@@ -136,14 +136,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
         R = np.diag(
             [
-                self.params["Rtd_c"],
-                self.params["Rtd_c"],
-                self.params["Rtd_c"],
-                self.params["Rtd_c"],
-                self.params["Rad_c"],
-                self.params["Rad_c"],
-                self.params["Rad_c"],
-                self.params["Rad_c"],
+                self.params["Rt_c"],
+                self.params["Rt_c"],
+                self.params["Rt_c"],
+                self.params["Rt_c"],
+                self.params["Ra_c"],
+                self.params["Ra_c"],
+                self.params["Ra_c"],
+                self.params["Ra_c"],
             ]
         )
         print("R: \n", R)
@@ -212,14 +212,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
         ur = np.zeros([nn, nu])
-        ur[:, 0] = ftd_ref[0]  # f1d
-        ur[:, 1] = ftd_ref[1]  # f2d
-        ur[:, 2] = ftd_ref[2]  # f3d
-        ur[:, 3] = ftd_ref[3]  # f4d
-        ur[:, 4] = ad_ref[0]  # a1d
-        ur[:, 5] = ad_ref[1]  # a2d
-        ur[:, 6] = ad_ref[2]  # a3d
-        ur[:, 7] = ad_ref[3]  # a4d
+        # ur[:, 0] = ftd_ref[0]  # f1d
+        # ur[:, 1] = ftd_ref[1]  # f2d
+        # ur[:, 2] = ftd_ref[2]  # f3d
+        # ur[:, 3] = ftd_ref[3]  # f4d
+        # ur[:, 4] = ad_ref[0]  # a1d
+        # ur[:, 5] = ad_ref[1]  # a2d
+        # ur[:, 6] = ad_ref[2]  # a3d
+        # ur[:, 7] = ad_ref[3]  # a4d
 
         # print("Reference state xr: \n", xr)
         # print("Target position: ", target_xyz)

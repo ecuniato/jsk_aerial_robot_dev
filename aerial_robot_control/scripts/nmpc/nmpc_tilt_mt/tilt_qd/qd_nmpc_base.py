@@ -168,53 +168,34 @@ class QDNMPCBase(RecedingHorizonBase):
             self.tau_ds_b = ca.vertcat(0.0, 0.0, 0.0)
 
         # Control inputs
-        if not self.differential_allocation:
-            # - Forces from thrust at each rotor
-            # Dynamically create thrust control variables for each rotor
-            self.ft_c_list = []
-            for i in range(1, self.num_rotors + 1):
-                ft_c = ca.SX.sym(f"ft{i}c")
-                setattr(self, f"ft{i}c", ft_c)
-                self.ft_c_list.append(ft_c)
-            self.ft_c = ca.vertcat(*self.ft_c_list)
-            controls = ca.vertcat(*self.ft_c_list)
-        else:
-            # The control inputs are the time-derivative of the thrust at each rotor
-            self.ftd_c_list = []
-            for i in range(1, self.num_rotors + 1):
-                ftd_c = ca.SX.sym(f"ft{i}d_c")
-                setattr(self, f"ft{i}d_c", ftd_c)
-                self.ftd_c_list.append(ftd_c)
-            self.ftd_c = ca.vertcat(*self.ftd_c_list)
-            controls = ca.vertcat(*self.ftd_c_list)
+        # - Forces from thrust at each rotor
+        # Dynamically create thrust control variables for each rotor
+        self.ft_c_list = []
+        for i in range(1, self.num_rotors + 1):
+            ft_c = ca.SX.sym(f"ft{i}c")
+            setattr(self, f"ft{i}c", ft_c)
+            self.ft_c_list.append(ft_c)
+        self.ft_c = ca.vertcat(*self.ft_c_list)
+        controls = ca.vertcat(*self.ft_c_list)
 
         # - Servo angle for tiltable rotors (actuated)
         if self.tilt:
-            if not self.differential_allocation:
-                # Dynamically create servo angle control variables for each rotor
-                self.a_c_list = []
-                self.ad_c_list = []
-                for i in range(1, self.num_rotors + 1):
-                    a_c = ca.SX.sym(f"a{i}c")
-                    setattr(self, f"a{i}c", a_c)
-                    self.a_c_list.append(a_c)
-                # Either use the time-derivative of the servo angle as control input directly
-                if self.include_servo_derivative:
-                    self.ad_c = ca.vertcat(*self.a_c_list)
-                    controls = ca.vertcat(controls, self.ad_c)
-                # Or use numerical differentation to calculate time-derivate in dynamical model
-                else:
-                    self.a_c = ca.vertcat(*self.a_c_list)
-                    controls = ca.vertcat(controls, self.a_c)
-            else:
-                # The control inputs are the time-derivative of the servo angle at each rotor
-                self.ad_c_list = []
-                for i in range(1, self.num_rotors + 1):
-                    ad_c = ca.SX.sym(f"a{i}d_c")
-                    setattr(self, f"a{i}d_c", ad_c)
-                    self.ad_c_list.append(ad_c)
-                self.ad_c = ca.vertcat(*self.ad_c_list)
+            # Dynamically create servo angle control variables for each rotor
+            self.a_c_list = []
+            self.ad_c_list = []
+            for i in range(1, self.num_rotors + 1):
+                a_c = ca.SX.sym(f"a{i}c")
+                setattr(self, f"a{i}c", a_c)
+                self.a_c_list.append(a_c)
+            # Either use the time-derivative of the servo angle as control input directly
+            if self.include_servo_derivative:
+                self.ad_c = ca.vertcat(*self.a_c_list)
                 controls = ca.vertcat(controls, self.ad_c)
+            # Or use numerical differentation to calculate time-derivate in dynamical model
+            else:
+                self.a_c = ca.vertcat(*self.a_c_list)
+                controls = ca.vertcat(controls, self.a_c)
+
 
         # Model parameters
         self.qwr = ca.SX.sym("qwr")  # Reference for quaternions
@@ -379,35 +360,26 @@ class QDNMPCBase(RecedingHorizonBase):
                 ca.mtimes(I_inv, (-ca.cross(self.w, ca.mtimes(I, self.w)) + self.tau_u_b_s + self.tau_ds_b + self.tau_dp_b)),
             )
 
-        if not self.differential_allocation:
-            # - Extend model by servo first-order dynamics
-            # Assumption if not included: a_c = a_s
-            # Either use continuous time-derivate as control variable
-            if self.include_servo_derivative:
-                ds = ca.vertcat(ds,
-                                self.ad_c
-                                )
-            # Or use numerical differentation
-            if self.include_servo_model and not self.include_servo_derivative:
-                ds = ca.vertcat(ds,
-                                (self.a_c - self.a_s) / t_servo  # Time constant of servo motor
-                                )
-        else:
+        # - Extend model by servo first-order dynamics
+        # Assumption if not included: a_c = a_s
+        # Either use continuous time-derivate as control variable
+        if self.include_servo_derivative:
             ds = ca.vertcat(ds,
                             self.ad_c
                             )
-
-        if not self.differential_allocation:
-            # - Extend model by thrust first-order dynamics
-            # Assumption if not included: f_tc = f_ts
-            if self.include_thrust_model:
-                ds = ca.vertcat(ds,
-                                (self.ft_c - self.ft_s) / t_rotor # Time constant of rotor
-                                )
-        else:
-            # We don't use rotor dynamics for the moment
+        # Or use numerical differentation
+        if self.include_servo_model and not self.include_servo_derivative:
+            servo_velocity = (self.a_c - self.a_s) / t_servo  # Time constant of servo motor
             ds = ca.vertcat(ds,
-                            self.ftd_c
+                            servo_velocity  # Time constant of servo motor
+                            )
+
+        # - Extend model by thrust first-order dynamics
+        # Assumption if not included: f_tc = f_ts
+        if self.include_thrust_model:
+            thrust_velocity = (self.ft_c - self.ft_s) / t_rotor  # Time constant of rotor
+            ds = ca.vertcat(ds,
+                            thrust_velocity # Time constant of rotor
                             )
             
         # - Extend model by forces and torques in Body frame for differential allocation
@@ -416,7 +388,7 @@ class QDNMPCBase(RecedingHorizonBase):
             allocation_matrix_fu_b = ca.simplify(ca.jacobian(fu_b, stacked_actuator_states))
             allocation_matrix_tau_u_b = ca.simplify(ca.jacobian(tau_u_b, stacked_actuator_states))
 
-
+            stacked_actuator_velocities = ca.vertcat(thrust_velocity, servo_velocity)
             # stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
             # stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
             # allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
@@ -427,8 +399,8 @@ class QDNMPCBase(RecedingHorizonBase):
             # controls_with_objective = controls - ca.mtimes(nullspace_projection, actuators_target)  # Project control inputs into the range space of the allocation matrix to ensure they contribute to the generated wrench
             # We don't use servo dynamics for the moment
             ds = ca.vertcat(ds,
-                            ca.mtimes(allocation_matrix_fu_b, controls),
-                            ca.mtimes(allocation_matrix_tau_u_b, controls),
+                            ca.mtimes(allocation_matrix_fu_b, stacked_actuator_velocities),
+                            ca.mtimes(allocation_matrix_tau_u_b, stacked_actuator_velocities),
                             )
 
         # - Extend model by disturbances simply to match state dimensions

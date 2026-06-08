@@ -170,7 +170,7 @@ def main(args):
 
     ts_sim = 0.005  # or 0.001
 
-    t_total_sim = 5.0
+    t_total_sim = 10.0
     if args.plot_type == 1:
         t_total_sim = 4.0
     if args.plot_type == 2:
@@ -225,7 +225,7 @@ def main(args):
         if nmpc.include_cog_dist_model and nmpc.differential_allocation:
             x_now = np.zeros(nx)
             x_now[: nx - 12] = deepcopy(x_now_sim[: nx - 12])
-        elif nmpc.include_cog_dist_model:
+        elif nmpc.include_cog_dist_model or nmpc.differential_allocation:
             x_now = np.zeros(nx)
             x_now[: nx - 6] = deepcopy(x_now_sim[: nx - 6])
         else:
@@ -254,8 +254,8 @@ def main(args):
                 x_now[13:17] = deepcopy(x_now_sim[17:21])
 
         # -------- Update control target --------
-        target_xyz = np.array([[0.0, 0.0, 0.0]]).T
-        target_rpy = np.array([[0.0, 0.0, 0.0]]).T
+        target_xyz = np.array([[0.0, 0.0, 1.0]]).T
+        target_rpy = np.array([[np.pi / 4, 0.0, 0.0]]).T
 
         # if args.plot_type == 2:
         #     target_xyz = np.array([[0.0, 0.0, 0.0]]).T
@@ -444,18 +444,13 @@ def main(args):
             if nmpc.include_servo_derivative:
                 alpha_integ += u_cmd[4:] * ts_ctrl
                 u_cmd[4:] = alpha_integ  # convert from delta input to real input
-            if nmpc.differential_allocation:
-                # print("Before integration - Alpha command: \n", alpha_integ)
-                alpha_integ += u_cmd[4:8].copy() * 0.0480
-                u_cmd[4:8] = alpha_integ.copy()
-                ft_integ += u_cmd[0:4].copy() * 0.0942
-                u_cmd[0:4] = ft_integ.copy()
-                # print("After integration - Alpha command: \n", u_cmd[4:8])
-
-                # print("Alpha command: \n", u_cmd[4:8])
-                # print("Thrust command: \n", u_cmd[0:4])
-            # u_cmd = np.zeros_like(u_cmd)  # For testing without control
-            # u_cmd[0:4] = 7.5
+            # if nmpc.differential_allocation:
+            #     u_cmd = np.zeros_like(u_cmd)
+            #     u_cmd[7] = 0.1
+            #     alpha_integ += u_cmd[4:8].copy() * 0.0480
+            #     u_cmd[4:8] = alpha_integ.copy()
+            #     ft_integ += u_cmd[0:4].copy() * 0.0942
+            #     u_cmd[0:4] = ft_integ.copy()
 
         print(f"Current time: {t_now:.4f} s")
 
