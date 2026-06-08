@@ -208,7 +208,7 @@ class QDNMPCReferenceGenerator:
         # for i in range(4):
         #     ad_ref[i] = -1.0 * current_angles[i]
 
-        print("Target ad_ref: \n", ad_ref)
+        # print("Target ad_ref: \n", ad_ref)
 
         # Assemble reference trajectories in controller file since their definition is
         # closely related to the cost function

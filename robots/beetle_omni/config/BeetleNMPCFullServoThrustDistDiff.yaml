@@ -35,8 +35,8 @@ controller:
     Qfu: 0 # generated body force
     Qtau: 0 # generated body torque
 
-    Rt_c: 0.5  # thrust rate of change
-    Ra_c: 5 # arm angular velocity
+    Rt_c: 0.1  # thrust rate of change
+    Ra_c: 1.0 # arm angular velocity
 
     is_attitude_ctrl: false
     is_body_rate_ctrl: false

@@ -17,7 +17,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
     def __init__(self, build: bool = True, phys=phys_omni):
         # Model name
-        self.model_name = "tilt_qd_servo_thrust_dist_mdl"
+        self.model_name = "tilt_qd_servo_thrust_mdl"
         self.phys = phys
 
         self.tilt = True
@@ -49,7 +49,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
             self.include_cog_dist_model,
         )
 
-    def get_cost_function(self, lin_acc_w=None, ang_acc_b=None):
+    def get_cost_function(self, lin_acc_w=None, ang_acc_b=None, nullspace_proj=None):
         # fmt: off
         # Cost function
         # see https://docs.acados.org/python_interface/#acados_template.acados_ocp_cost.AcadosOcpCost for details
@@ -85,10 +85,22 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
         state_y_e = state_y
 
-        control_y = ca.vertcat(
-            self.ft_c - self.ft_s,
-            self.a_c - self.a_s,
-        )
+        thrust_target = 0.0  # A bit less than hover
+        actuators_target = -ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
+        target_gain = 0.6
+        t_rotor = 0.0942  # FIX: do not hardcode Time constant of rotor
+        t_servo = 0.0480  # FIX: do not hardcode Time constant of servo motor
+        time_constant_matrix = ca.diag(ca.vertcat([t_rotor]*4, [t_servo]*4))
+        print("Time constant matrix: \n", time_constant_matrix)
+        # print("Nullspace projector: \n", nullspace_proj)
+
+        # control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, actuators_target)) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s)
+        control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, nullspace_proj) @ actuators_target - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
+        print("Control y: \n", control_y)
+        # control_y = ca.vertcat(
+        #     self.ft_c - self.ft_s,
+        #     self.a_c - self.a_s,
+        # )
 
         return state_y, state_y_e, control_y
         # fmt: on

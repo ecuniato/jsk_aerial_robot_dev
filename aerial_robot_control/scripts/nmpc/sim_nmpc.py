@@ -170,7 +170,7 @@ def main(args):
 
     ts_sim = 0.005  # or 0.001
 
-    t_total_sim = 10.0
+    t_total_sim = 20.0
     if args.plot_type == 1:
         t_total_sim = 4.0
     if args.plot_type == 2:
@@ -255,47 +255,47 @@ def main(args):
 
         # -------- Update control target --------
         target_xyz = np.array([[0.0, 0.0, 1.0]]).T
-        target_rpy = np.array([[np.pi / 4, 0.0, 0.0]]).T
+        target_rpy = np.array([[0.0, 0.0, 0.0]]).T
 
         # if args.plot_type == 2:
         #     target_xyz = np.array([[0.0, 0.0, 0.0]]).T
         #     target_rpy = np.array([[0.5, 0.5, 0.5]]).T
 
-        # if t_total_sim > 2.0:
-        #     if 2.0 <= t_now < 6:
-        #         target_xyz = np.array([[0.0, 0.0, 30.0]]).T
+        if t_total_sim > 2.0:
+            if 2.0 <= t_now < 6:
+                target_xyz = np.array([[0.0, 0.0, 1.0]]).T
 
-        #         roll = 90 / 180.0 * np.pi
-        #         pitch = 45.0 / 180.0 * np.pi
-        #         yaw = 90.0 / 180.0 * np.pi
-        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
+                roll = 90 / 180.0 * np.pi
+                pitch = 45.0 / 180.0 * np.pi
+                yaw = 90.0 / 180.0 * np.pi
+                target_rpy = np.array([[roll, pitch, yaw]]).T
 
-        #     # if 3.0 <= t_now < 5.5:
-        #     #     assert t_sqp_end <= 3.0
-        #     #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
-        #     #     target_rpy = np.array([[0.0, 0.0, 0.0]]).T
-        #     # if t_now >= 5.5:
-        #     #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
+            # if 3.0 <= t_now < 5.5:
+            #     assert t_sqp_end <= 3.0
+            #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
+            #     target_rpy = np.array([[0.0, 0.0, 0.0]]).T
+            # if t_now >= 5.5:
+            #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
 
-        #     #     roll = 30.0 / 180.0 * np.pi
-        #     #     pitch = 0.0 / 180.0 * np.pi
-        #     #     yaw = 0.0 / 180.0 * np.pi
-        #     #     target_rpy = np.array([[roll, pitch, yaw]]).T
+            #     roll = 30.0 / 180.0 * np.pi
+            #     pitch = 0.0 / 180.0 * np.pi
+            #     yaw = 0.0 / 180.0 * np.pi
+            #     target_rpy = np.array([[roll, pitch, yaw]]).T
 
-        #     if 6 <= t_now < 10:
-        #         assert t_sqp_end <= 3.0
-        #         target_xyz = np.array([[0.0, 0.0, 1.0]]).T
-        #         roll = 90.0 / 180.0 * np.pi
-        #         pitch = -45.0 / 180.0 * np.pi
-        #         yaw = 90.0 / 180.0 * np.pi
-        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
+            if 6 <= t_now < 12:
+                assert t_sqp_end <= 3.0
+                target_xyz = np.array([[0.0, 0.0, 1.0]]).T
+                roll = 90.0 / 180.0 * np.pi
+                pitch = -45.0 / 180.0 * np.pi
+                yaw = 90.0 / 180.0 * np.pi
+                target_rpy = np.array([[roll, pitch, yaw]]).T
 
-        #     if t_now >= 10:
-        #         target_xyz = np.array([[0.0, 0.0, 1.0]]).T
-        #         roll = 0.0 / 180.0 * np.pi
-        #         pitch = 0.0 / 180.0 * np.pi
-        #         yaw = 0.0 / 180.0 * np.pi
-        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
+            if t_now >= 12:
+                target_xyz = np.array([[0.0, 0.0, 1.0]]).T
+                roll = 0.0 / 180.0 * np.pi
+                pitch = 0.0 / 180.0 * np.pi
+                yaw = 0.0 / 180.0 * np.pi
+                target_rpy = np.array([[roll, pitch, yaw]]).T
 
         # Compute reference trajectory from target pose
         xr, ur = reference_generator.compute_trajectory(
@@ -355,21 +355,21 @@ def main(args):
                 x_opt = ocp_solver.get(0, "x")
                 u_opt = ocp_solver.get(0, "u")
 
-                print("Current state controller - sim:")
-                for idx in range(nx):
-                    if idx < len(x_now_sim):
-                        print(
-                            f"x[{idx}]: {x_now[idx]:.4f}  --- sim: {x_now_sim[idx]:.4f} --- optimal: {x_opt[idx]:.4f} --- setpoint: {xr[0, idx]:.4f}"
-                        )
-                    else:
-                        print(
-                            f"x[{idx}]: {x_now[idx]:.4f}"
-                            + "  --- sim: N/A"
-                            + f" --- optimal: {x_opt[idx]:.4f}"
-                            + f" --- setpoint: {xr[0, idx]:.4f}"
-                        )
+                # print("Current state controller - sim:")
+                # for idx in range(nx):
+                #     if idx < len(x_now_sim):
+                #         print(
+                #             f"x[{idx}]: {x_now[idx]:.4f}  --- sim: {x_now_sim[idx]:.4f} --- optimal: {x_opt[idx]:.4f} --- setpoint: {xr[0, idx]:.4f}"
+                #         )
+                #     else:
+                #         print(
+                #             f"x[{idx}]: {x_now[idx]:.4f}"
+                #             + "  --- sim: N/A"
+                #             + f" --- optimal: {x_opt[idx]:.4f}"
+                #             + f" --- setpoint: {xr[0, idx]:.4f}"
+                #         )
 
-                print("Optimal control u_opt: \n", u_opt)
+                # print("Optimal control u_opt: \n", u_opt)
                 velocity_commands = u_opt.copy()
                 # cost = ocp_solver.get_cost()
                 # print("Cost:", cost)
@@ -451,6 +451,18 @@ def main(args):
             #     u_cmd[4:8] = alpha_integ.copy()
             #     ft_integ += u_cmd[0:4].copy() * 0.0942
             #     u_cmd[0:4] = ft_integ.copy()
+            # tilt_rate_limit = 4.0  # rad/s
+            # u_cmd[4:8] = np.clip(
+            #     u_cmd[4:8],
+            #     -tilt_rate_limit * 0.0480 + current_servo_angle,
+            #     tilt_rate_limit * 0.0480 + current_servo_angle,
+            # )
+            # thrust_rate_limit = 50.0  # N/s
+            # u_cmd[0:4] = np.clip(
+            #     u_cmd[0:4],
+            #     -thrust_rate_limit * 0.0942 + current_thrust,
+            #     thrust_rate_limit * 0.0942 + current_thrust,
+            # )
 
         print(f"Current time: {t_now:.4f} s")
 

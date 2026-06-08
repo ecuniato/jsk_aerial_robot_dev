@@ -360,6 +360,30 @@ class QDNMPCBase(RecedingHorizonBase):
                 ca.mtimes(I_inv, (-ca.cross(self.w, ca.mtimes(I, self.w)) + self.tau_u_b_s + self.tau_ds_b + self.tau_dp_b)),
             )
 
+        # Compute differential allocation stuff
+        if self.include_servo_model:
+            servo_velocity = (self.a_c - self.a_s) / t_servo  # Time constant of servo motor
+        if self.include_thrust_model:
+            thrust_velocity = (self.ft_c - self.ft_s) / t_rotor  # Time constant of rotor
+
+        if self.tilt and self.differential_allocation:
+            stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
+            stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
+            allocation_matrix_fu_b = ca.simplify(ca.jacobian(fu_b, stacked_actuator_states))
+            allocation_matrix_tau_u_b = ca.simplify(ca.jacobian(tau_u_b, stacked_actuator_states))
+            allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
+
+            stacked_actuator_velocities = ca.vertcat(thrust_velocity, servo_velocity)
+            # stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
+            # stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
+            # allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
+            # # print("Allocation matrix:")
+            # # print(allocation_matrix)
+            # nullspace_projector_fu_b = ca.simplify(ca.SX.eye(allocation_matrix_fu_b.shape[1]) - ca.mtimes(ca.pinv(allocation_matrix_fu_b), allocation_matrix_fu_b))
+            # nullspace_projector_tau_u_b = ca.simplify(ca.SX.eye(allocation_matrix_tau_u_b.shape[1]) - ca.mtimes(ca.pinv(allocation_matrix_tau_u_b), allocation_matrix_tau_u_b))
+            pseudo_inverse_allocation_matrix = ca.mtimes(allocation_matrix.T, ca.inv(ca.mtimes(allocation_matrix, allocation_matrix.T) + 1e-6 * ca.SX.eye(allocation_matrix.shape[0])))  # Damped pseudo-inverse for better numerical stability
+            nullspace_projector = ca.simplify(ca.SX.eye(allocation_matrix.shape[1]) - ca.mtimes(pseudo_inverse_allocation_matrix, allocation_matrix))
+
         # - Extend model by servo first-order dynamics
         # Assumption if not included: a_c = a_s
         # Either use continuous time-derivate as control variable
@@ -369,7 +393,6 @@ class QDNMPCBase(RecedingHorizonBase):
                             )
         # Or use numerical differentation
         if self.include_servo_model and not self.include_servo_derivative:
-            servo_velocity = (self.a_c - self.a_s) / t_servo  # Time constant of servo motor
             ds = ca.vertcat(ds,
                             servo_velocity  # Time constant of servo motor
                             )
@@ -377,27 +400,12 @@ class QDNMPCBase(RecedingHorizonBase):
         # - Extend model by thrust first-order dynamics
         # Assumption if not included: f_tc = f_ts
         if self.include_thrust_model:
-            thrust_velocity = (self.ft_c - self.ft_s) / t_rotor  # Time constant of rotor
             ds = ca.vertcat(ds,
                             thrust_velocity # Time constant of rotor
                             )
             
         # - Extend model by forces and torques in Body frame for differential allocation
         if self.tilt and self.differential_allocation:
-            stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
-            allocation_matrix_fu_b = ca.simplify(ca.jacobian(fu_b, stacked_actuator_states))
-            allocation_matrix_tau_u_b = ca.simplify(ca.jacobian(tau_u_b, stacked_actuator_states))
-
-            stacked_actuator_velocities = ca.vertcat(thrust_velocity, servo_velocity)
-            # stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
-            # stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
-            # allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
-            # # print("Allocation matrix:")
-            # # print(allocation_matrix)
-            # nullspace_projection = ca.simplify(ca.SX.eye(allocation_matrix.shape[1]) - ca.mtimes(ca.pinv(allocation_matrix), allocation_matrix))
-            # actuators_target = ca.vertcat(self.ft_s, self.a_s)
-            # controls_with_objective = controls - ca.mtimes(nullspace_projection, actuators_target)  # Project control inputs into the range space of the allocation matrix to ensure they contribute to the generated wrench
-            # We don't use servo dynamics for the moment
             ds = ca.vertcat(ds,
                             ca.mtimes(allocation_matrix_fu_b, stacked_actuator_velocities),
                             ca.mtimes(allocation_matrix_tau_u_b, stacked_actuator_velocities),
@@ -429,6 +437,8 @@ class QDNMPCBase(RecedingHorizonBase):
             )
 
             state_y, state_y_e, control_y = self.get_cost_function(lin_acc_w=lin_acc_w, ang_acc_b=ang_acc_b)
+        elif self.differential_allocation:
+            state_y, state_y_e, control_y = self.get_cost_function(nullspace_proj=nullspace_projector)
         else:
             state_y, state_y_e, control_y = self.get_cost_function()
 
@@ -703,33 +713,46 @@ class QDNMPCBase(RecedingHorizonBase):
         # TODO Potentially a good idea to omit the input constraint when set the equivalent state
         # -- Index for ft1c, ft2c, ..., ftNc
         ocp.constraints.idxbu = np.arange(0, self.num_rotors)
-        # -- Index for a1c, a2c, ..., aNc
+        # # -- Index for a1c, a2c, ..., aNc
         if self.tilt:
             ocp.constraints.idxbu = np.append(ocp.constraints.idxbu, np.arange(self.num_rotors, 2 * self.num_rotors))
 
-        if self.differential_allocation:
-            # For differential allocation, the control inputs are the time-derivative of the thrust and servo angles.
-            ocp.constraints.lbu = np.array([-1e3] * self.num_rotors)
+        # -- Lower Input Bound
+        ocp.constraints.lbu = np.array([self.params["thrust_min"]] * self.num_rotors)
+
+        if self.tilt:
             ocp.constraints.lbu = np.append(ocp.constraints.lbu,
-                [-4e1] * self.num_rotors)
-            ocp.constraints.ubu = np.array([1e3] * self.num_rotors)
+                [self.params["a_min"]] * self.num_rotors)
+
+        # -- Upper Input Bound
+        ocp.constraints.ubu = np.array([self.params["thrust_max"]] * self.num_rotors)
+
+        if self.tilt:
             ocp.constraints.ubu = np.append(ocp.constraints.ubu,
-                [4e1] * self.num_rotors)
-        else:
-            # -- Lower Input Bound
-            ocp.constraints.lbu = np.array([self.params["thrust_min"]] * self.num_rotors)
-
-            if self.tilt:
-                ocp.constraints.lbu = np.append(ocp.constraints.lbu,
-                    [self.params["a_min"]] * self.num_rotors)
-
-            # -- Upper Input Bound
-            ocp.constraints.ubu = np.array([self.params["thrust_max"]] * self.num_rotors)
-
-            if self.tilt:
-                ocp.constraints.ubu = np.append(ocp.constraints.ubu,
-                    [self.params["a_max"]] * self.num_rotors)
+                [self.params["a_max"]] * self.num_rotors)
         # fmt: on
+
+        # nonlinear constraints to have min_thrust_rate <= (ft_c - ft_s)/Tf <= max_thrust_rate
+        if self.differential_allocation:
+            if self.include_thrust_model:
+                t_rotor = 0.0942  # FIX: do not hardcode
+                thrust_rate_max = 1e3
+                h_rotor = (self.ft_c - self.ft_s) / t_rotor
+                ocp.model.con_h_expr = h_rotor
+                ocp.constraints.lh = np.array([-thrust_rate_max] * self.num_rotors)
+                ocp.constraints.uh = np.array([thrust_rate_max] * self.num_rotors)
+
+            if self.include_servo_model and self.tilt:
+                t_servo = 0.0480  # FIX: do not hardcode
+                servo_rate_max = 6e0
+                h_servo = (self.a_c - self.a_s) / t_servo
+                ocp.model.con_h_expr = ca.vertcat(ocp.model.con_h_expr, h_servo)
+                ocp.constraints.lh = np.append(
+                    ocp.constraints.lh, [-servo_rate_max] * self.num_rotors
+                )
+                ocp.constraints.uh = np.append(
+                    ocp.constraints.uh, [servo_rate_max] * self.num_rotors
+                )
 
         # Initial state and reference: Set all values such that robot is hovering
         x_ref = np.zeros(nx)
