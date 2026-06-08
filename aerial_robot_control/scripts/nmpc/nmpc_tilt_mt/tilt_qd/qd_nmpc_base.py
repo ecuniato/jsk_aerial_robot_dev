@@ -733,26 +733,26 @@ class QDNMPCBase(RecedingHorizonBase):
         # fmt: on
 
         # nonlinear constraints to have min_thrust_rate <= (ft_c - ft_s)/Tf <= max_thrust_rate
-        if self.differential_allocation:
-            if self.include_thrust_model:
-                t_rotor = 0.0942  # FIX: do not hardcode
-                thrust_rate_max = 1e3
-                h_rotor = (self.ft_c - self.ft_s) / t_rotor
-                ocp.model.con_h_expr = h_rotor
-                ocp.constraints.lh = np.array([-thrust_rate_max] * self.num_rotors)
-                ocp.constraints.uh = np.array([thrust_rate_max] * self.num_rotors)
+        # if self.differential_allocation:
+        #     if self.include_thrust_model:
+        #         t_rotor = 0.0942  # FIX: do not hardcode
+        #         thrust_rate_max = 1e3
+        #         h_rotor = (self.ft_c - self.ft_s) / t_rotor
+        #         ocp.model.con_h_expr = h_rotor
+        #         ocp.constraints.lh = np.array([-thrust_rate_max] * self.num_rotors)
+        #         ocp.constraints.uh = np.array([thrust_rate_max] * self.num_rotors)
 
-            if self.include_servo_model and self.tilt:
-                t_servo = 0.0480  # FIX: do not hardcode
-                servo_rate_max = 6e0
-                h_servo = (self.a_c - self.a_s) / t_servo
-                ocp.model.con_h_expr = ca.vertcat(ocp.model.con_h_expr, h_servo)
-                ocp.constraints.lh = np.append(
-                    ocp.constraints.lh, [-servo_rate_max] * self.num_rotors
-                )
-                ocp.constraints.uh = np.append(
-                    ocp.constraints.uh, [servo_rate_max] * self.num_rotors
-                )
+        #     if self.include_servo_model and self.tilt:
+        #         t_servo = 0.0480  # FIX: do not hardcode
+        #         servo_rate_max = 6e0
+        #         h_servo = (self.a_c - self.a_s) / t_servo
+        #         ocp.model.con_h_expr = ca.vertcat(ocp.model.con_h_expr, h_servo)
+        #         ocp.constraints.lh = np.append(
+        #             ocp.constraints.lh, [-servo_rate_max] * self.num_rotors
+        #         )
+        #         ocp.constraints.uh = np.append(
+        #             ocp.constraints.uh, [servo_rate_max] * self.num_rotors
+        #         )
 
         # Initial state and reference: Set all values such that robot is hovering
         x_ref = np.zeros(nx)
