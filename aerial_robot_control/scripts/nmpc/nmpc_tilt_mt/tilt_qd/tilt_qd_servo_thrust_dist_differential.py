@@ -21,18 +21,22 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         self.phys = phys
 
         self.tilt = True
-        self.include_servo_model = False
+        self.include_servo_model = True
         self.include_servo_derivative = False
-        self.include_thrust_model = False  # TODO extend to include_thrust_derivative
-        self.include_cog_dist_model = False
+        self.include_thrust_model = True  # TODO extend to include_thrust_derivative
+        self.include_cog_dist_model = True
         self.include_cog_dist_parameter = (
-            False  # TODO seperation between model and parameter necessary?
+            True  # TODO seperation between model and parameter necessary?
         )
         self.include_impedance = False
+        self.differential_allocation = True
 
         # Read parameters from configuration file in the robot's package
         self.read_params(
-            "controller", "nmpc", "beetle_omni", "BeetleNMPCFullServoThrustDist.yaml"
+            "controller",
+            "nmpc",
+            "beetle_omni",
+            "BeetleNMPCFullServoThrustDistDiff.yaml",
         )
 
         # Create acados model & solver and generate c code
@@ -71,17 +75,19 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
             qe_y + self.qyr,
             qe_z + self.qzr,
             rot_tb @ self.w,
-            # self.a_s,
-            # self.ft_s,
-            # self.fds_w,
-            # self.tau_ds_b,
+            self.a_s,
+            self.ft_s,
+            self.fu_b_s,
+            self.tau_u_b_s,
+            self.fds_w,
+            self.tau_ds_b,
         )
 
         state_y_e = state_y
 
         control_y = ca.vertcat(
-            self.ft_c,  # ft_c_ref must be zero!
-            self.a_c,     # a_c_ref must be zero!
+            self.ftd_c,
+            self.ad_c,
         )
 
         return state_y, state_y_e, control_y
@@ -104,49 +110,57 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
                 self.params["Qw_xy"],
                 self.params["Qw_xy"],
                 self.params["Qw_z"],
-                # self.params["Qa"],
-                # self.params["Qa"],
-                # self.params["Qa"],
-                # self.params["Qa"],
-                # self.params["Qt"],
-                # self.params["Qt"],
-                # self.params["Qt"],
-                # self.params["Qt"],
-                # 0,
-                # 0,
-                # 0,
-                # 0,
-                # 0,
-                # 0,
+                self.params["Qa"],
+                self.params["Qa"],
+                self.params["Qa"],
+                self.params["Qa"],
+                self.params["Qt"],
+                self.params["Qt"],
+                self.params["Qt"],
+                self.params["Qt"],
+                self.params["Qfu"],
+                self.params["Qfu"],
+                self.params["Qfu"],
+                self.params["Qtau"],
+                self.params["Qtau"],
+                self.params["Qtau"],
+                0,  # disturbance
+                0,
+                0,
+                0,
+                0,
+                0,  # disturbance
             ]
         )
         print("Q: \n", Q)
 
         R = np.diag(
             [
-                # self.params["Rtc_d"],
-                # self.params["Rtc_d"],
-                # self.params["Rtc_d"],
-                # self.params["Rtc_d"],
-                # self.params["Rac_d"],
-                # self.params["Rac_d"],
-                # self.params["Rac_d"],
-                # self.params["Rac_d"],
-                self.params["Rt"],
-                self.params["Rt"],
-                self.params["Rt"],
-                self.params["Rt"],
-                self.params["Rac"],
-                self.params["Rac"],
-                self.params["Rac"],
-                self.params["Rac"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
             ]
         )
         print("R: \n", R)
 
         return Q, R
 
-    def get_reference(self, target_xyz, target_qwxyz, ft_ref, a_ref):
+    def get_reference(
+        self,
+        target_xyz,
+        target_qwxyz,
+        ft_ref,
+        a_ref,
+        body_forces_ref,
+        body_torques_ref,
+        ad_ref,
+        ftd_ref,
+    ):
         """
         Assemble reference trajectory from target pose and reference control values.
         Gets called from reference generator class.
@@ -155,8 +169,10 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
         :param target_xyz: Target position
         :param target_qwxy: Target quarternions
-        :param ft_ref: Target thrust
-        :param a_ref: Target servo angles
+        :param body_forces_ref: Reference body forces
+        :param body_torques_ref: Reference body torques
+        :param ad_ref: Reference servo angle derivatives
+        :param ftd_ref: Reference thrust derivatives
         :return xr: Reference for the state x
         :return ur: Reference for the input u
         """
@@ -177,18 +193,36 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        # xr[:, 13] = a_ref[0]
-        # xr[:, 14] = a_ref[1]
-        # xr[:, 15] = a_ref[2]
-        # xr[:, 16] = a_ref[3]
-        # xr[:, 17] = ft_ref[0]
-        # xr[:, 18] = ft_ref[1]
-        # xr[:, 19] = ft_ref[2]
-        # xr[:, 20] = ft_ref[3]
+        xr[:, 13] = a_ref[0]  # a1
+        xr[:, 14] = a_ref[1]  # a2
+        xr[:, 15] = a_ref[2]  # a3
+        xr[:, 16] = a_ref[3]  # a4
+        xr[:, 17] = ft_ref[0]  # f1
+        xr[:, 18] = ft_ref[1]  # f2
+        xr[:, 19] = ft_ref[2]  # f3
+        xr[:, 20] = ft_ref[3]  # f4
+        xr[:, 21] = body_forces_ref[0]
+        xr[:, 22] = body_forces_ref[1]
+        xr[:, 23] = body_forces_ref[2]
+        xr[:, 24] = body_torques_ref[0]
+        xr[:, 25] = body_torques_ref[1]
+        xr[:, 26] = body_torques_ref[2]
+        # No reference for disturbance (idx: 27-32)
 
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
         ur = np.zeros([nn, nu])
+        ur[:, 0] = ftd_ref[0]  # f1d
+        ur[:, 1] = ftd_ref[1]  # f2d
+        ur[:, 2] = ftd_ref[2]  # f3d
+        ur[:, 3] = ftd_ref[3]  # f4d
+        ur[:, 4] = ad_ref[0]  # a1d
+        ur[:, 5] = ad_ref[1]  # a2d
+        ur[:, 6] = ad_ref[2]  # a3d
+        ur[:, 7] = ad_ref[3]  # a4d
+
+        # print("Reference state xr: \n", xr)
+        # print("Target position: ", target_xyz)
 
         return xr, ur
 

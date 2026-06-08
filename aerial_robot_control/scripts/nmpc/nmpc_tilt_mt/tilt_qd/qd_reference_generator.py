@@ -10,7 +10,9 @@ class QDNMPCReferenceGenerator:
     :param nmpc: NMPC controller object
     """
 
-    def __init__(self, nmpc, p1_b, p2_b, p3_b, p4_b, dr1, dr2, dr3, dr4, kq_d_kt, mass, gravity):
+    def __init__(
+        self, nmpc, p1_b, p2_b, p3_b, p4_b, dr1, dr2, dr3, dr4, kq_d_kt, mass, gravity
+    ):
         self.nmpc = nmpc
 
         self.p1_b = p1_b
@@ -70,32 +72,48 @@ class QDNMPCReferenceGenerator:
         self.alloc_mat[2, 7] = 1
 
         # - Torque
-        self.alloc_mat[3, 0] = -dr1 * kq_d_kt * p1_b[1] / sqrt_p1b_xy + p1_b[0] * p1_b[2] / sqrt_p1b_xy
-        self.alloc_mat[4, 0] = dr1 * kq_d_kt * p1_b[0] / sqrt_p1b_xy + p1_b[1] * p1_b[2] / sqrt_p1b_xy
+        self.alloc_mat[3, 0] = (
+            -dr1 * kq_d_kt * p1_b[1] / sqrt_p1b_xy + p1_b[0] * p1_b[2] / sqrt_p1b_xy
+        )
+        self.alloc_mat[4, 0] = (
+            dr1 * kq_d_kt * p1_b[0] / sqrt_p1b_xy + p1_b[1] * p1_b[2] / sqrt_p1b_xy
+        )
         self.alloc_mat[5, 0] = -p1_b[0] ** 2 / sqrt_p1b_xy - p1_b[1] ** 2 / sqrt_p1b_xy
 
         self.alloc_mat[3, 1] = p1_b[1]
         self.alloc_mat[4, 1] = -p1_b[0]
         self.alloc_mat[5, 1] = -dr1 * kq_d_kt
 
-        self.alloc_mat[3, 2] = -dr2 * kq_d_kt * p2_b[1] / sqrt_p2b_xy + p2_b[0] * p2_b[2] / sqrt_p2b_xy
-        self.alloc_mat[4, 2] = dr2 * kq_d_kt * p2_b[0] / sqrt_p2b_xy + p2_b[1] * p2_b[2] / sqrt_p2b_xy
+        self.alloc_mat[3, 2] = (
+            -dr2 * kq_d_kt * p2_b[1] / sqrt_p2b_xy + p2_b[0] * p2_b[2] / sqrt_p2b_xy
+        )
+        self.alloc_mat[4, 2] = (
+            dr2 * kq_d_kt * p2_b[0] / sqrt_p2b_xy + p2_b[1] * p2_b[2] / sqrt_p2b_xy
+        )
         self.alloc_mat[5, 2] = -p2_b[0] ** 2 / sqrt_p2b_xy - p2_b[1] ** 2 / sqrt_p2b_xy
 
         self.alloc_mat[3, 3] = p2_b[1]
         self.alloc_mat[4, 3] = -p2_b[0]
         self.alloc_mat[5, 3] = -dr2 * kq_d_kt
 
-        self.alloc_mat[3, 4] = -dr3 * kq_d_kt * p3_b[1] / sqrt_p3b_xy + p3_b[0] * p3_b[2] / sqrt_p3b_xy
-        self.alloc_mat[4, 4] = dr3 * kq_d_kt * p3_b[0] / sqrt_p3b_xy + p3_b[1] * p3_b[2] / sqrt_p3b_xy
+        self.alloc_mat[3, 4] = (
+            -dr3 * kq_d_kt * p3_b[1] / sqrt_p3b_xy + p3_b[0] * p3_b[2] / sqrt_p3b_xy
+        )
+        self.alloc_mat[4, 4] = (
+            dr3 * kq_d_kt * p3_b[0] / sqrt_p3b_xy + p3_b[1] * p3_b[2] / sqrt_p3b_xy
+        )
         self.alloc_mat[5, 4] = -p3_b[0] ** 2 / sqrt_p3b_xy - p3_b[1] ** 2 / sqrt_p3b_xy
 
         self.alloc_mat[3, 5] = p3_b[1]
         self.alloc_mat[4, 5] = -p3_b[0]
         self.alloc_mat[5, 5] = -dr3 * kq_d_kt
 
-        self.alloc_mat[3, 6] = -dr4 * kq_d_kt * p4_b[1] / sqrt_p4b_xy + p4_b[0] * p4_b[2] / sqrt_p4b_xy
-        self.alloc_mat[4, 6] = dr4 * kq_d_kt * p4_b[0] / sqrt_p4b_xy + p4_b[1] * p4_b[2] / sqrt_p4b_xy
+        self.alloc_mat[3, 6] = (
+            -dr4 * kq_d_kt * p4_b[1] / sqrt_p4b_xy + p4_b[0] * p4_b[2] / sqrt_p4b_xy
+        )
+        self.alloc_mat[4, 6] = (
+            dr4 * kq_d_kt * p4_b[0] / sqrt_p4b_xy + p4_b[1] * p4_b[2] / sqrt_p4b_xy
+        )
         self.alloc_mat[5, 6] = -p4_b[0] ** 2 / sqrt_p4b_xy - p4_b[1] ** 2 / sqrt_p4b_xy
 
         self.alloc_mat[3, 7] = p4_b[1]
@@ -106,7 +124,9 @@ class QDNMPCReferenceGenerator:
         self.alloc_mat_pinv = np.linalg.pinv(self.alloc_mat)
 
     @staticmethod
-    def _ensure_servo_angles_continuity(a_ref: np.array, a_ref_prev: np.array) -> np.array:
+    def _ensure_servo_angles_continuity(
+        a_ref: np.array, a_ref_prev: np.array
+    ) -> np.array:
         """
         Ensure that the servo angles are continuous by checking the difference
         between the current and previous reference angles.
@@ -119,7 +139,9 @@ class QDNMPCReferenceGenerator:
                 a_ref[i] += 2 * np.pi
         return a_ref
 
-    def compute_trajectory(self, target_xyz, target_rpy):
+    def compute_trajectory(
+        self, target_xyz, target_rpy, current_angles, current_thrusts
+    ):
         """
         Convert current target pose to a reference trajectory over the entire horizon.
         Compute target quaternions and control reference from a target rotation and then
@@ -127,9 +149,12 @@ class QDNMPCReferenceGenerator:
 
         :param target_xyz: Target position
         :param target_rpy: Target orientation (roll, pitch, yaw)
+        :param current_angles: Current servo angles
+        :param current_thrusts: Current thrusts
         :return xr: Reference for the state x
         :return ur: Reference for the input u
         """
+
         if len(target_xyz) != 3 or len(target_rpy) != 3:
             raise ValueError("Target state should be given in xyz and rpy.")
         roll = target_rpy[0]
@@ -144,7 +169,14 @@ class QDNMPCReferenceGenerator:
         rot_inv = tf.quaternion_matrix(q_inv)
         fg_w = np.array([0, 0, self.mass * self.gravity, 0])  # World frame
         fg_b = rot_inv @ fg_w  # Body frame
-        target_wrench = np.array([[fg_b.item(0), fg_b.item(1), fg_b.item(2), 0, 0, 0]]).T
+        target_wrench = np.array(
+            [[fg_b.item(0), fg_b.item(1), fg_b.item(2), 0, 0, 0]]
+        ).T
+
+        target_body_forces = target_wrench[:3]
+        target_body_torques = target_wrench[3:]
+        # print("target_body_forces: \n", target_body_forces)
+        # print("target_body_torques: \n", target_body_torques)
 
         # A faster method if alloc_mat is dynamic:  x, _, _, _ = np.linalg.lstsq(alloc_mat, target_wrench, rcond=None)
         target_force = self.alloc_mat_pinv @ target_wrench
@@ -169,8 +201,74 @@ class QDNMPCReferenceGenerator:
         a_ref = self._ensure_servo_angles_continuity(a_ref, self.a_ref_prev)
         self.a_ref_prev = a_ref
 
+        ad_ref = [0.0, 0.0, 0.0, 0.0]  # Reference servo angle derivatives
+        ftd_ref = [0.0, 0.0, 0.0, 0.0]  # Reference thrust derivatives
+
+        # Reference ad to bring angles to 0 smoothly
+        # for i in range(4):
+        #     ad_ref[i] = -1.0 * current_angles[i]
+
+        print("Target ad_ref: \n", ad_ref)
+
         # Assemble reference trajectories in controller file since their definition is
         # closely related to the cost function
-        xr, ur = self.nmpc.get_reference(target_xyz, target_qwxyz, ft_ref, a_ref)
+        # xr, ur = self.nmpc.get_reference(target_xyz, target_qwxyz, ft_ref, a_ref)
+        xr, ur = self.nmpc.get_reference(
+            target_xyz,
+            target_qwxyz,
+            ft_ref,
+            a_ref,
+            target_body_forces,
+            target_body_torques,
+            ad_ref,
+            ftd_ref,
+        )
 
         return xr, ur
+
+    def compute_differential_allocation_matrix(self, current_angles, current_forces):
+        """
+        Compute the differential allocation matrix at the current reference.
+
+        :param current_angles: Current servo angles
+        :param current_forces: Current forces
+        :return alloc_mat_diff: Differential allocation matrix
+        """
+        # Compute current body wrench from current servo angles and forces
+        actuators_jacobian = np.zeros((8, 8))
+        for i in range(4):
+            actuators_jacobian[2 * i, 2 * i + 1] = np.sin(current_angles[i])
+            actuators_jacobian[2 * i + 1, 2 * i + 1] = np.cos(current_angles[i])
+            actuators_jacobian[2 * i, 2 * i] = current_forces[i] * np.cos(
+                current_angles[i]
+            )
+            actuators_jacobian[2 * i + 1, 2 * i] = -current_forces[i] * np.sin(
+                current_angles[i]
+            )
+
+        alloc_mat_diff = self.alloc_mat @ actuators_jacobian
+
+        return alloc_mat_diff
+
+    def compute_current_body_wrench(self, current_angles, current_forces):
+        """
+        Compute current body wrench from current servo angles and forces.
+
+        :param current_angles: Current servo angles
+        :param current_forces: Current forces
+        :return current_body_wrench: Current body wrench
+        """
+        # Compute current force and torque from current servo angles and forces
+        allocation_matrix_input = np.zeros((8, 1))
+        for i in range(4):
+            allocation_matrix_input[2 * i, 0] = current_forces[i] * np.sin(
+                current_angles[i]
+            )
+            allocation_matrix_input[2 * i + 1, 0] = current_forces[i] * np.cos(
+                current_angles[i]
+            )
+
+        # Compute current body wrench from current force and torque
+        current_body_wrench = self.alloc_mat @ allocation_matrix_input
+
+        return current_body_wrench

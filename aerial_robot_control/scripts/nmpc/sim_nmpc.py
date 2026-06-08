@@ -45,6 +45,10 @@ from nmpc_tilt_mt.tilt_bi.tilt_bi_2ord_servo import NMPCTiltBi2OrdServo
 from nmpc_tilt_mt.tilt_tri.tilt_tri_servo import NMPCTiltTriServo
 from nmpc_tilt_mt.tilt_tri.tilt_tri_servo_dist import NMPCTiltTriServoDist
 
+import signal
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
 
 def main(args):
     # ========== Init ==========
@@ -65,6 +69,8 @@ def main(args):
             nmpc = NMPCTiltQdServoThrustDist(phys=phys_omni)
         elif args.model == 23:
             nmpc = NMPCTiltQdServoThrustDistDiff(phys=phys_omni)
+            alpha_integ = np.zeros(4)
+            ft_integ = np.zeros(4)
 
         # Archived methods
         elif args.model == 91:
@@ -164,7 +170,7 @@ def main(args):
 
     ts_sim = 0.005  # or 0.001
 
-    t_total_sim = 15.0
+    t_total_sim = 5.0
     if args.plot_type == 1:
         t_total_sim = 4.0
     if args.plot_type == 2:
@@ -209,19 +215,32 @@ def main(args):
     t_ctl = 0.0
     x_now_sim = x_init_sim
     for i in range(N_sim):
+        velocity_commands = np.zeros(nu)
         # --------- Update time ---------
         t_now = i * ts_sim
         t_ctl += ts_sim
 
         # --------- Update state estimation ---------
         # Assemble state from simulation and disturbance estimation
-        if nmpc.include_cog_dist_model:
+        if nmpc.include_cog_dist_model and nmpc.differential_allocation:
+            x_now = np.zeros(nx)
+            x_now[: nx - 12] = deepcopy(x_now_sim[: nx - 12])
+        elif nmpc.include_cog_dist_model:
             x_now = np.zeros(nx)
             x_now[: nx - 6] = deepcopy(x_now_sim[: nx - 6])
         else:
             x_now = deepcopy(
                 x_now_sim[:nx]
             )  # The dimension of x_now may be smaller than x_now_sim
+
+        # We need to update the current body wrench state
+        if nmpc.differential_allocation:
+            tilt_angles = x_now[13:17]
+            thrusts = x_now[17:21]
+            current_body_wrench = reference_generator.compute_current_body_wrench(
+                tilt_angles, thrusts
+            )
+            x_now[21:27] = current_body_wrench.flatten()
 
         # Access from less indices
         if (nmpc.include_thrust_model and not nmpc.include_servo_model) and (
@@ -235,51 +254,56 @@ def main(args):
                 x_now[13:17] = deepcopy(x_now_sim[17:21])
 
         # -------- Update control target --------
-        target_xyz = np.array([[0.3, 0.6, 1.0]]).T
+        target_xyz = np.array([[0.0, 0.0, 0.0]]).T
         target_rpy = np.array([[0.0, 0.0, 0.0]]).T
 
-        if args.plot_type == 2:
-            target_xyz = np.array([[0.0, 0.0, 0.0]]).T
-            target_rpy = np.array([[0.5, 0.5, 0.5]]).T
+        # if args.plot_type == 2:
+        #     target_xyz = np.array([[0.0, 0.0, 0.0]]).T
+        #     target_rpy = np.array([[0.5, 0.5, 0.5]]).T
 
-        if t_total_sim > 2.0:
-            if 2.0 <= t_now < 6:
-                target_xyz = np.array([[0.3, 0.6, 1.0]]).T
+        # if t_total_sim > 2.0:
+        #     if 2.0 <= t_now < 6:
+        #         target_xyz = np.array([[0.0, 0.0, 30.0]]).T
 
-                roll = 90.0 / 180.0 * np.pi
-                pitch = 0.0 / 180.0 * np.pi
-                yaw = 0.0 / 180.0 * np.pi
-                target_rpy = np.array([[roll, pitch, yaw]]).T
+        #         roll = 90 / 180.0 * np.pi
+        #         pitch = 45.0 / 180.0 * np.pi
+        #         yaw = 90.0 / 180.0 * np.pi
+        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
 
-            # if 3.0 <= t_now < 5.5:
-            #     assert t_sqp_end <= 3.0
-            #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
-            #     target_rpy = np.array([[0.0, 0.0, 0.0]]).T
-            # if t_now >= 5.5:
-            #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
+        #     # if 3.0 <= t_now < 5.5:
+        #     #     assert t_sqp_end <= 3.0
+        #     #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
+        #     #     target_rpy = np.array([[0.0, 0.0, 0.0]]).T
+        #     # if t_now >= 5.5:
+        #     #     target_xyz = np.array([[1.0, 1.0, 1.0]]).T
 
-            #     roll = 30.0 / 180.0 * np.pi
-            #     pitch = 0.0 / 180.0 * np.pi
-            #     yaw = 0.0 / 180.0 * np.pi
-            #     target_rpy = np.array([[roll, pitch, yaw]]).T
+        #     #     roll = 30.0 / 180.0 * np.pi
+        #     #     pitch = 0.0 / 180.0 * np.pi
+        #     #     yaw = 0.0 / 180.0 * np.pi
+        #     #     target_rpy = np.array([[roll, pitch, yaw]]).T
 
-            if 6 <= t_now < 10:
-                assert t_sqp_end <= 3.0
-                target_xyz = np.array([[0.3, 0.6, 1.0]]).T
-                roll = 0.0 / 180.0 * np.pi
-                pitch = 90.0 / 180.0 * np.pi
-                yaw = 0.0 / 180.0 * np.pi
-                target_rpy = np.array([[roll, pitch, yaw]]).T
+        #     if 6 <= t_now < 10:
+        #         assert t_sqp_end <= 3.0
+        #         target_xyz = np.array([[0.0, 0.0, 1.0]]).T
+        #         roll = 90.0 / 180.0 * np.pi
+        #         pitch = -45.0 / 180.0 * np.pi
+        #         yaw = 90.0 / 180.0 * np.pi
+        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
 
-            if t_now >= 10:
-                target_xyz = np.array([[0.3, 0.6, 1.0]]).T
-                roll = 0.0 / 180.0 * np.pi
-                pitch = 180.0 / 180.0 * np.pi
-                yaw = 0.0 / 180.0 * np.pi
-                target_rpy = np.array([[roll, pitch, yaw]]).T
+        #     if t_now >= 10:
+        #         target_xyz = np.array([[0.0, 0.0, 1.0]]).T
+        #         roll = 0.0 / 180.0 * np.pi
+        #         pitch = 0.0 / 180.0 * np.pi
+        #         yaw = 0.0 / 180.0 * np.pi
+        #         # target_rpy = np.array([[roll, pitch, yaw]]).T
 
         # Compute reference trajectory from target pose
-        xr, ur = reference_generator.compute_trajectory(target_xyz, target_rpy)
+        xr, ur = reference_generator.compute_trajectory(
+            target_xyz,
+            target_rpy,
+            current_angles=x_now[13:17],
+            current_thrusts=x_now[17:21],
+        )
 
         if args.plot_type == 2:
             if nx > 13:
@@ -327,6 +351,28 @@ def main(args):
             # Compute control feedback and take the first action
             try:
                 u_cmd = ocp_solver.solve_for_x0(x_now)
+
+                x_opt = ocp_solver.get(0, "x")
+                u_opt = ocp_solver.get(0, "u")
+
+                print("Current state controller - sim:")
+                for idx in range(nx):
+                    if idx < len(x_now_sim):
+                        print(
+                            f"x[{idx}]: {x_now[idx]:.4f}  --- sim: {x_now_sim[idx]:.4f} --- optimal: {x_opt[idx]:.4f} --- setpoint: {xr[0, idx]:.4f}"
+                        )
+                    else:
+                        print(
+                            f"x[{idx}]: {x_now[idx]:.4f}"
+                            + "  --- sim: N/A"
+                            + f" --- optimal: {x_opt[idx]:.4f}"
+                            + f" --- setpoint: {xr[0, idx]:.4f}"
+                        )
+
+                print("Optimal control u_opt: \n", u_opt)
+                velocity_commands = u_opt.copy()
+                # cost = ocp_solver.get_cost()
+                # print("Cost:", cost)
             except Exception as e:
                 print(
                     f"Round {i}: acados ocp_solver returned status {ocp_solver.status}. Exiting."
@@ -338,19 +384,85 @@ def main(args):
 
         if args.arch == "qd":
             # Use previous servo angle as reference
-            if type(nmpc) is NMPCTiltQdNoServoAcCost:
-                nmpc.update_a_prev(
-                    u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
+            # if type(nmpc) is NMPCTiltQdNoServoAcCost:
+            #     nmpc.update_a_prev(
+            #         u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
+            #     )
+
+            current_servo_angle = x_now[13:17]
+            current_thrust = x_now[17:21]
+            differential_allocation_mat = (
+                reference_generator.compute_differential_allocation_matrix(
+                    current_servo_angle, current_thrust
+                )
+            )
+            # print("Differential allocation matrix: \n", differential_allocation_mat)
+
+            try:
+
+                differential_allocation_mat_pinv = np.linalg.pinv(
+                    differential_allocation_mat
+                )
+
+                # print(
+                #     "Pseudoinverse of the allocation matrix: \n",
+                #     differential_allocation_mat_pinv,
+                # )
+
+                # Compute nullspace projection matrix
+                nullspace_projection = (
+                    np.eye(8)
+                    - differential_allocation_mat_pinv @ differential_allocation_mat
+                )
+
+                # print(
+                #     "Nullspace projection matrix: \n",
+                #     nullspace_projection,
+                # )
+
+                # current_servo_angle = np.zeros_like(current_servo_angle)
+                current_thrust = np.zeros_like(current_thrust)
+                optimization_objective = np.concatenate(
+                    (current_thrust, current_servo_angle)
+                )
+                # print(
+                #     "Optimization objective (current thrusts and servo angles): \n",
+                #     optimization_objective,
+                # )
+
+                # u_cmd -= 1.0 * nullspace_projection @ optimization_objective
+                # print(
+                #     "Nullspace optimization command: \n",
+                #     1 * nullspace_projection @ optimization_objective,
+                # )
+            except np.linalg.LinAlgError:
+                print(
+                    "Singular allocation matrix encountered. Skipping nullspace optimization for this step."
                 )
 
             # Use servo angle derivative as state and therefore integrate servo angle command
             if nmpc.include_servo_derivative:
                 alpha_integ += u_cmd[4:] * ts_ctrl
                 u_cmd[4:] = alpha_integ  # convert from delta input to real input
+            if nmpc.differential_allocation:
+                # print("Before integration - Alpha command: \n", alpha_integ)
+                alpha_integ += u_cmd[4:8].copy() * 0.0480
+                u_cmd[4:8] = alpha_integ.copy()
+                ft_integ += u_cmd[0:4].copy() * 0.0942
+                u_cmd[0:4] = ft_integ.copy()
+                # print("After integration - Alpha command: \n", u_cmd[4:8])
+
+                # print("Alpha command: \n", u_cmd[4:8])
+                # print("Thrust command: \n", u_cmd[0:4])
+            # u_cmd = np.zeros_like(u_cmd)  # For testing without control
+            # u_cmd[0:4] = 7.5
+
+        print(f"Current time: {t_now:.4f} s")
 
         # --------- Update simulation ----------
-        sim_solver.set("x", x_now_sim)
-        sim_solver.set("u", u_cmd)
+        sim_solver.set("x", x_now_sim.copy())
+        sim_solver.set("u", u_cmd.copy())
+        # print("Sim command u_cmd: \n", u_cmd)
 
         status = sim_solver.solve()
         if status != 0:
@@ -366,7 +478,7 @@ def main(args):
 
         # --------- Update visualizer ----------
         viz.update(
-            i, x_now_sim, u_cmd
+            i, x_now_sim, u_cmd.copy()
         )  # Note: The recording frequency of u_cmd is the same as ts_sim
 
     # ========== Visualize ==========
