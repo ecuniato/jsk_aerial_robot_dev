@@ -270,6 +270,9 @@ def main(args):
             ftd_s = (ft_c - x_now_sim[17:21]) / t_rotor_sim
             x_now[27:31] = deepcopy(ad_s)  # current servo angle derivatives
             x_now[31:35] = deepcopy(ftd_s)  # current thrust derivatives
+            # add gaussian noise
+            x_now[27:31] += np.random.normal(0, 0.1, 4)
+            x_now[31:35] += np.random.normal(0, 1, 4)
 
         # Access from less indices
         if (nmpc.include_thrust_model and not nmpc.include_servo_model) and (
