@@ -95,8 +95,8 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         # print("Nullspace projector: \n", nullspace_proj)
 
         # control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, actuators_target)) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s)
-        control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, nullspace_proj) @ actuators_target - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
-        print("Control y: \n", control_y)
+        control_y = ca.simplify(target_gain * ca.mtimes(ca.mtimes(time_constant_matrix, nullspace_proj), actuators_target) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
+        print("Control y: \n", type(control_y))
         # control_y = ca.vertcat(
         #     self.ft_c - self.ft_s,
         #     self.a_c - self.a_s,
