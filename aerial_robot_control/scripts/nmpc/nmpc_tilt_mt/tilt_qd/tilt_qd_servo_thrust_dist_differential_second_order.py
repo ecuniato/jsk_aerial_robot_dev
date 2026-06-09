@@ -231,10 +231,7 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        # xr[:, 13] = a_ref[0]  # a1
-        # xr[:, 14] = a_ref[1]  # a2
-        # xr[:, 15] = a_ref[2]  # a3
-        # xr[:, 16] = a_ref[3]  # a4
+        # No reference for servo angles (idx: 13-16)
         xr[:, 17] = ft_ref[0]  # f1
         xr[:, 18] = ft_ref[1]  # f2
         xr[:, 19] = ft_ref[2]  # f3
@@ -250,17 +247,6 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
         ur = np.zeros([nn, nu])
-        # ur[:, 0] = ftd_ref[0]  # f1d
-        # ur[:, 1] = ftd_ref[1]  # f2d
-        # ur[:, 2] = ftd_ref[2]  # f3d
-        # ur[:, 3] = ftd_ref[3]  # f4d
-        # ur[:, 4] = ad_ref[0]  # a1d
-        # ur[:, 5] = ad_ref[1]  # a2d
-        # ur[:, 6] = ad_ref[2]  # a3d
-        # ur[:, 7] = ad_ref[3]  # a4d
-
-        # print("Reference state xr: \n", xr)
-        # print("Target position: ", target_xyz)
 
         return xr, ur
 

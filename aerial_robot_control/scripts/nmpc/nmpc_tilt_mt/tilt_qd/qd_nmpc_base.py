@@ -404,7 +404,7 @@ class QDNMPCBase(RecedingHorizonBase):
                 ca.mtimes(I_inv, (-ca.cross(self.w, ca.mtimes(I, self.w)) + self.tau_u_b_s + self.tau_ds_b + self.tau_dp_b)),
             )
 
-        # Compute differential allocation stuff
+        # Compute differential allocation stuff and jacobian nullspaces for control allocation with redundancy resolution
         if self.tilt and self.differential_allocation:
             stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
             stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
@@ -412,13 +412,6 @@ class QDNMPCBase(RecedingHorizonBase):
             allocation_matrix_tau_u_b = ca.simplify(ca.jacobian(tau_u_b, stacked_actuator_states))
             allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
 
-            # stacked_actuator_states = ca.vertcat(self.ft_s, self.a_s)
-            # stacked_wrenches = ca.vertcat(fu_b, tau_u_b)
-            # allocation_matrix = ca.simplify(ca.jacobian(stacked_wrenches, stacked_actuator_states))
-            # # print("Allocation matrix:")
-            # # print(allocation_matrix)
-            # nullspace_projector_fu_b = ca.simplify(ca.SX.eye(allocation_matrix_fu_b.shape[1]) - ca.mtimes(ca.pinv(allocation_matrix_fu_b), allocation_matrix_fu_b))
-            # nullspace_projector_tau_u_b = ca.simplify(ca.SX.eye(allocation_matrix_tau_u_b.shape[1]) - ca.mtimes(ca.pinv(allocation_matrix_tau_u_b), allocation_matrix_tau_u_b))
             pseudo_inverse_allocation_matrix = ca.mtimes(allocation_matrix.T, ca.inv(ca.mtimes(allocation_matrix, allocation_matrix.T) + 1e-6 * ca.SX.eye(allocation_matrix.shape[0])))  # Damped pseudo-inverse for better numerical stability
             nullspace_projector = ca.simplify(ca.SX.eye(allocation_matrix.shape[1]) - ca.mtimes(pseudo_inverse_allocation_matrix, allocation_matrix))
 

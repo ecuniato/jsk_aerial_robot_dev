@@ -191,14 +191,6 @@ def main(args):
     x_init_sim = np.zeros(nx_sim)
     x_init_sim[6] = 1.0  # qw
 
-    # Init thrusts to hover
-    # if args.arch == "qd":
-    #     if sim_nmpc.include_thrust_model:
-    #         hover_thrust = sim_nmpc.phys.mass * sim_nmpc.phys.gravity / 4.0
-    #         x_init_sim[17:21] = hover_thrust
-    #     if sim_nmpc.include_servo_model:
-    #         x_init_sim[13:17] = 0.1
-
     # ---------- Reference ----------
     reference_generator = nmpc.get_reference_generator()
 
@@ -229,7 +221,6 @@ def main(args):
     x_now_sim = x_init_sim
 
     for i in range(N_sim):
-        velocity_commands = np.zeros(nu)
         # --------- Update time ---------
         t_now = i * ts_sim
         t_ctl += ts_sim
@@ -383,27 +374,27 @@ def main(args):
             # Compute control feedback and take the first action
             try:
                 u_cmd = ocp_solver.solve_for_x0(x_now)
-
                 x_opt = ocp_solver.get(0, "x")
 
-                print("Current state controller - sim:")
-                for idx in range(nx):
-                    if idx < len(x_now_sim):
-                        print(
-                            f"x[{idx}]: {x_now[idx]:.4f}  --- sim: {x_now_sim[idx]:.4f} --- optimal: {x_opt[idx]:.4f} --- setpoint: {xr[0, idx]:.4f}"
-                        )
-                    else:
-                        print(
-                            f"x[{idx}]: {x_now[idx]:.4f}"
-                            + "  --- sim: N/A"
-                            + f" --- optimal: {x_opt[idx]:.4f}"
-                            + f" --- setpoint: {xr[0, idx]:.4f}"
-                        )
-                print("Control command: ")
-                for idx in range(nu):
-                    print(
-                        f"u[{idx}]: optimal: {u_cmd[idx]:.4f} --- setpoint: {ur[0, idx]:.4f}"
-                    )
+                # DEBUG print
+                # print("Current state controller - sim:")
+                # for idx in range(nx):
+                #     if idx < len(x_now_sim):
+                #         print(
+                #             f"x[{idx}]: {x_now[idx]:.4f}  --- sim: {x_now_sim[idx]:.4f} --- optimal: {x_opt[idx]:.4f} --- setpoint: {xr[0, idx]:.4f}"
+                #         )
+                #     else:
+                #         print(
+                #             f"x[{idx}]: {x_now[idx]:.4f}"
+                #             + "  --- sim: N/A"
+                #             + f" --- optimal: {x_opt[idx]:.4f}"
+                #             + f" --- setpoint: {xr[0, idx]:.4f}"
+                #         )
+                # print("Control command: ")
+                # for idx in range(nu):
+                #     print(
+                #         f"u[{idx}]: optimal: {u_cmd[idx]:.4f} --- setpoint: {ur[0, idx]:.4f}"
+                #     )
 
                 if nmpc.actuator_second_order:
                     ft_integ += u_cmd[0:4].copy() * ts_ctrl
@@ -411,14 +402,16 @@ def main(args):
                     alpha_integ += u_cmd[4:8].copy() * ts_ctrl
                     u_cmd[4:8] = alpha_integ.copy()
 
-                    print("Control command after integration: ")
-                    for idx in range(nu):
-                        print(f"u[{idx}]: optimal: {u_cmd[idx]:.4f}")
+                    # DEBUG print
+                    # print("Control command after integration: ")
+                    # for idx in range(nu):
+                    #     print(f"u[{idx}]: optimal: {u_cmd[idx]:.4f}")
 
             except Exception as e:
                 print(
                     f"Round {i}: acados ocp_solver returned status {ocp_solver.status}.\n Exception: {e}.\n Exiting."
                 )
+                # Debug print the trajectories for analysis if something goes wrong
                 N = ocp_solver.acados_ocp.dims.N
 
                 x_traj = [ocp_solver.get(i, "x") for i in range(N + 1)]
@@ -437,7 +430,6 @@ def main(args):
                         f"u[{idx}]: "
                         + "  ".join(f"{u_traj[j][idx]:.4f}" for j in range(N))
                     )
-                u_cmd = ocp_solver.get(0, "u")
                 break
 
         comp_time_end = time.time()
@@ -460,7 +452,6 @@ def main(args):
         # --------- Update simulation ----------
         sim_solver.set("x", x_now_sim.copy())
         sim_solver.set("u", u_cmd.copy())
-        # print("Sim command u_cmd: \n", u_cmd)
 
         status = sim_solver.solve()
         if status != 0:
@@ -474,13 +465,17 @@ def main(args):
         x_history.append(x_now_sim.copy())
         u_history.append(u_cmd.copy())
 
-        tilt_vel = x_now[27:31].copy()
-        ft_vel = x_now[31:35].copy()
-        actuator_vel = np.concatenate((ft_vel, tilt_vel))
-        # --------- Update visualizer ----------
-        viz.update(
-            i, x_now_sim, actuator_vel.copy()
-        )  # Note: The recording frequency of u_cmd is the same as ts_sim
+        if nmpc.actuator_second_order:
+            # In place of the servo and thrust commands, visualize their derivatives for better insight
+            tilt_vel = x_now[27:31].copy()
+            ft_vel = x_now[31:35].copy()
+            actuator_vel = np.concatenate((ft_vel, tilt_vel))
+            # --------- Update visualizer ----------
+            viz.update(
+                i, x_now_sim, actuator_vel.copy()
+            )  # Note: The recording frequency of u_cmd is the same as ts_sim
+        else:
+            viz.update(i, x_now_sim, u_cmd.copy())
 
     # ========== Visualize ==========
     if not args.no_viz:
