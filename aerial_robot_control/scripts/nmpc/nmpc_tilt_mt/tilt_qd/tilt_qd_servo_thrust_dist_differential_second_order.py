@@ -31,6 +31,7 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         self.include_impedance = False
         self.differential_allocation = True
         self.actuator_second_order = True
+        self.use_nullspace_goal = False
 
         # Read parameters from configuration file in the robot's package
         self.read_params(
@@ -74,13 +75,16 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         rot_bt = self._get_rot_wb_ca(self.ee_q[0], self.ee_q[1], self.ee_q[2], self.ee_q[3])
         rot_tb = rot_bt.T
 
-        thrust_target = 0.0  # A bit less than hover
-        target_gain = 0.3
-        actuators_target = -target_gain*ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
-
-        # nullspace_proj = ca.DM.eye(8) # ignore for now
-        actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - ca.mtimes(nullspace_proj, actuators_target))
-        print("Actuator velocity y: \n", actuator_velocity_y)
+        if self.use_nullspace_goal:
+            # If using nullspace goal, we want to bring our thrusts to thrust_target.
+            # This is 0, but will just reduce the thrust as much as possible without compromising the main control objective, thanks to the nullspace projection.
+            thrust_target = 0.0
+            target_gain = 0.3
+            actuators_target = -target_gain*ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
+            actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - ca.mtimes(nullspace_proj, actuators_target))
+        else:
+            # without nullspace goal, just minimize actuator velocity
+            actuator_velocity_y = ca.vertcat(self.ftd_s, self.ad_s)
 
         state_y = ca.vertcat(
             self.p,# + rot_wb @ self.ee_p,
@@ -94,27 +98,27 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
             self.ft_s,
             self.fu_b_s,
             self.tau_u_b_s,
-            self.ad_s,
-            self.ftd_s,
-            # actuator_velocity_y[4:8],  # servo velocity
-            # actuator_velocity_y[0:4],  # thrust velocity
+            actuator_velocity_y[4:8], # servo angle derivatives
+            actuator_velocity_y[0:4], # thrust derivatives
             self.fds_w,
             self.tau_ds_b,
         )
 
         state_y_e = state_y
 
-        time_contant_matrix_inv = ca.diag(ca.vertcat([1/0.0942]*4, [1/0.0480]*4)) # FIX: do not hardcode Time constant of rotor and servo
-        actuators_target_jacobian = ca.jacobian(actuators_target, ca.vertcat(self.ft_s, self.a_s))
-        # control_y = ca.simplify(
-        #     ca.mtimes(time_contant_matrix_inv,ca.vertcat(self.ftd_c - self.ftd_s, self.ad_c - self.ad_s))
-        #     - ca.mtimes(nullspace_proj_dot,actuators_target)
-        #     - ca.mtimes(ca.mtimes(nullspace_proj,actuators_target_jacobian), ca.vertcat(self.ftd_s, self.ad_s)) )
-
-        control_y = ca.vertcat(
-            self.ftd_c - self.ftd_s,
-            self.ad_c - self.ad_s,
-        )
+        if self.use_nullspace_goal:
+            time_contant_matrix_inv = ca.diag(ca.vertcat([1/0.0942]*4, [1/0.0480]*4)) # FIX: do not hardcode Time constant of rotor and servo
+            actuators_target_jacobian = ca.jacobian(actuators_target, ca.vertcat(self.ft_s, self.a_s))
+            control_y = ca.simplify(
+                ca.mtimes(time_contant_matrix_inv,ca.vertcat(self.ftd_c - self.ftd_s, self.ad_c - self.ad_s))
+                - ca.mtimes(nullspace_proj_dot,actuators_target)
+                - ca.mtimes(ca.mtimes(nullspace_proj,actuators_target_jacobian), ca.vertcat(self.ftd_s, self.ad_s)) )
+        else:
+            # without nullspace goal, just minimize actuator acceleration
+            control_y = ca.vertcat(
+                self.ftd_c - self.ftd_s,
+                self.ad_c - self.ad_s,
+            )
 
         return state_y, state_y_e, control_y
         # fmt: on

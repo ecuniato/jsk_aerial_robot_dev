@@ -783,6 +783,7 @@ class QDNMPCBase(RecedingHorizonBase):
                 [self.params["thrust_max"]] * self.num_rotors)
             
         if self.actuator_second_order:
+            # Constraints for actuator velocities (time-derivative of servo angles and thrusts)
             alpha_velocity_idx_start_end = (27, 27 + self.num_rotors)
             thrust_velocity_idx_start_end = (27 + self.num_rotors, 27 + 2 * self.num_rotors)
             ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(alpha_velocity_idx_start_end[0], alpha_velocity_idx_start_end[1]))
@@ -792,6 +793,8 @@ class QDNMPCBase(RecedingHorizonBase):
             ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["alpha_velocity_max"]] * self.num_rotors)
             ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["thrust_velocity_max"]] * self.num_rotors)
 
+        # Only have input constraints if not using second-order actuator dynamics.
+        # With second-order dynamics, the actuator velocities are states and are already constrained, and this is enough.
         if not self.actuator_second_order:
             # - Input box constraints bu
             # TODO Potentially a good idea to omit the input constraint when set the equivalent state
@@ -814,27 +817,7 @@ class QDNMPCBase(RecedingHorizonBase):
             if self.tilt:
                 ocp.constraints.ubu = np.append(ocp.constraints.ubu,
                     [self.params["a_max"]] * self.num_rotors)
-        # else:
-        #     # - Input box constraints bu for second-order actuator dynamics
-        #     # -- Index for ftd1c, ftd2c, ..., ftdNc
-        #     ocp.constraints.idxbu = np.arange(0, self.num_rotors)
-        #     # -- Index for ad1c, ad2c, ..., adNc
-        #     if self.tilt:
-        #         ocp.constraints.idxbu = np.append(ocp.constraints.idxbu, np.arange(self.num_rotors, 2 * self.num_rotors))
 
-        #     # -- Lower Input Bound
-        #     ocp.constraints.lbu = np.array([self.params["thrust_velocity_min"]] * self.num_rotors)
-
-        #     if self.tilt:
-        #         ocp.constraints.lbu = np.append(ocp.constraints.lbu,
-        #             [self.params["alpha_velocity_min"]] * self.num_rotors)
-
-        #     # -- Upper Input Bound
-        #     ocp.constraints.ubu = np.array([self.params["thrust_velocity_max"]] * self.num_rotors)
-
-        #     if self.tilt:
-        #         ocp.constraints.ubu = np.append(ocp.constraints.ubu,
-        #             [self.params["alpha_velocity_max"]] * self.num_rotors)
         # fmt: on
 
         # Initial state and reference: Set all values such that robot is hovering
