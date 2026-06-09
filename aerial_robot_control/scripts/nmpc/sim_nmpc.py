@@ -228,12 +228,6 @@ def main(args):
     t_ctl = 0.0
     x_now_sim = x_init_sim
 
-    if (
-        nmpc.include_cog_dist_model
-        and nmpc.differential_allocation
-        and nmpc.actuator_second_order
-    ):
-        print(f"Copying states up to index {nx - 12 - 8} from sim to controller.")
     for i in range(N_sim):
         velocity_commands = np.zeros(nu)
         # --------- Update time ---------
@@ -388,7 +382,6 @@ def main(args):
                 u_cmd = ocp_solver.solve_for_x0(x_now)
 
                 x_opt = ocp_solver.get(0, "x")
-                u_opt = ocp_solver.get(0, "u")
 
                 print("Current state controller - sim:")
                 for idx in range(nx):
@@ -406,13 +399,19 @@ def main(args):
                 print("Control command: ")
                 for idx in range(nu):
                     print(
-                        f"u[{idx}]: optimal: {u_opt[idx]:.4f} --- setpoint: {ur[0, idx]:.4f}"
+                        f"u[{idx}]: optimal: {u_cmd[idx]:.4f} --- setpoint: {ur[0, idx]:.4f}"
                     )
 
-                # print("Optimal control u_opt: \n", u_opt)
-                velocity_commands = u_opt.copy()
-                # cost = ocp_solver.get_cost()
-                # print("Cost:", cost)
+                if nmpc.actuator_second_order:
+                    ft_integ += u_cmd[0:4].copy() * ts_ctrl
+                    u_cmd[0:4] = ft_integ.copy()
+                    alpha_integ += u_cmd[4:8].copy() * ts_ctrl
+                    u_cmd[4:8] = alpha_integ.copy()
+
+                    print("Control command after integration: ")
+                    for idx in range(nu):
+                        print(f"u[{idx}]: optimal: {u_cmd[idx]:.4f}")
+
             except Exception as e:
                 print(
                     f"Round {i}: acados ocp_solver returned status {ocp_solver.status}.\n Exception: {e}.\n Exiting."
@@ -443,94 +442,15 @@ def main(args):
 
         if args.arch == "qd":
             # Use previous servo angle as reference
-            # if type(nmpc) is NMPCTiltQdNoServoAcCost:
-            #     nmpc.update_a_prev(
-            #         u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
-            #     )
-
-            current_servo_angle = x_now[13:17]
-            current_thrust = x_now[17:21]
-            differential_allocation_mat = (
-                reference_generator.compute_differential_allocation_matrix(
-                    current_servo_angle, current_thrust
-                )
-            )
-            # print("Differential allocation matrix: \n", differential_allocation_mat)
-
-            try:
-
-                differential_allocation_mat_pinv = np.linalg.pinv(
-                    differential_allocation_mat
-                )
-
-                # print(
-                #     "Pseudoinverse of the allocation matrix: \n",
-                #     differential_allocation_mat_pinv,
-                # )
-
-                # Compute nullspace projection matrix
-                nullspace_projection = (
-                    np.eye(8)
-                    - differential_allocation_mat_pinv @ differential_allocation_mat
-                )
-
-                # print(
-                #     "Nullspace projection matrix: \n",
-                #     nullspace_projection,
-                # )
-
-                # current_servo_angle = np.zeros_like(current_servo_angle)
-                current_thrust = np.zeros_like(current_thrust)
-                optimization_objective = np.concatenate(
-                    (current_thrust, current_servo_angle)
-                )
-                # print(
-                #     "Optimization objective (current thrusts and servo angles): \n",
-                #     optimization_objective,
-                # )
-
-                # u_cmd -= 1.0 * nullspace_projection @ optimization_objective
-                # print(
-                #     "Nullspace optimization command: \n",
-                #     1 * nullspace_projection @ optimization_objective,
-                # )
-            except np.linalg.LinAlgError:
-                print(
-                    "Singular allocation matrix encountered. Skipping nullspace optimization for this step."
+            if type(nmpc) is NMPCTiltQdNoServoAcCost:
+                nmpc.update_a_prev(
+                    u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
                 )
 
             # Use servo angle derivative as state and therefore integrate servo angle command
             if nmpc.include_servo_derivative:
                 alpha_integ += u_cmd[4:] * ts_ctrl
                 u_cmd[4:] = alpha_integ  # convert from delta input to real input
-            if nmpc.actuator_second_order:
-                ft_integ += u_cmd[0:4].copy() * ts_ctrl
-                u_cmd[0:4] = ft_integ.copy()
-                alpha_integ += u_cmd[4:8].copy() * ts_ctrl
-                u_cmd[4:8] = alpha_integ.copy()
-
-                print("Control command after integration: ")
-                for idx in range(nu):
-                    print(f"u[{idx}]: optimal: {u_cmd[idx]:.4f}")
-            # if nmpc.differential_allocation:
-            #     u_cmd = np.zeros_like(u_cmd)
-            #     u_cmd[7] = 0.1
-            #     alpha_integ += u_cmd[4:8].copy() * 0.0480
-            #     u_cmd[4:8] = alpha_integ.copy()
-            #     ft_integ += u_cmd[0:4].copy() * 0.0942
-            #     u_cmd[0:4] = ft_integ.copy()
-            # tilt_rate_limit = 4.0  # rad/s
-            # u_cmd[4:8] = np.clip(
-            #     u_cmd[4:8],
-            #     -tilt_rate_limit * 0.0480 + current_servo_angle,
-            #     tilt_rate_limit * 0.0480 + current_servo_angle,
-            # )
-            # thrust_rate_limit = 50.0  # N/s
-            # u_cmd[0:4] = np.clip(
-            #     u_cmd[0:4],
-            #     -thrust_rate_limit * 0.0942 + current_thrust,
-            #     thrust_rate_limit * 0.0942 + current_thrust,
-            # )
 
         print(f"Current time: {t_now:.4f} s")
 
