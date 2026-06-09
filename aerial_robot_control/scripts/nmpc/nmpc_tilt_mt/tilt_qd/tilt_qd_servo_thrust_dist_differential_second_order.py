@@ -7,7 +7,7 @@ from .fake_sensor import FakeSensor
 from . import phys_param_beetle_omni as phys_omni
 
 
-class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
+class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
     """
     Controller Name: Tiltable Quadrotor NMPC including Servo and Thrust Model as well as CoG Disturbance
     The controller itself is constructed in base class. The control inputs are the rates of the tilt and thrust commands.
@@ -30,14 +30,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         )
         self.include_impedance = False
         self.differential_allocation = True
-        self.actuator_second_order = False
+        self.actuator_second_order = True
 
         # Read parameters from configuration file in the robot's package
         self.read_params(
             "controller",
             "nmpc",
             "beetle_omni",
-            "BeetleNMPCFullServoThrustDistDiff.yaml",
+            "BeetleNMPCFullServoThrustDistDiffSecondOrder.yaml",
         )
 
         # Create acados model & solver and generate c code
@@ -80,6 +80,8 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
             self.ft_s,
             self.fu_b_s,
             self.tau_u_b_s,
+            self.ad_s,
+            self.ftd_s,
             self.fds_w,
             self.tau_ds_b,
         )
@@ -96,12 +98,12 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         # print("Nullspace projector: \n", nullspace_proj)
 
         # control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, actuators_target)) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s)
-        control_y = ca.simplify(target_gain * ca.mtimes(ca.mtimes(time_constant_matrix, nullspace_proj), actuators_target) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
-        print("Control y: \n", type(control_y))
-        # control_y = ca.vertcat(
-        #     self.ft_c - self.ft_s,
-        #     self.a_c - self.a_s,
-        # )
+        # control_y = ca.simplify(target_gain * ca.mtimes(ca.mtimes(time_constant_matrix, nullspace_proj), actuators_target) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
+        # print("Control y: \n", type(control_y))
+        control_y = ca.vertcat(
+            self.ftd_c - self.ftd_s,
+            self.ad_c - self.ad_s,
+        )
 
         return state_y, state_y_e, control_y
         # fmt: on
@@ -137,6 +139,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
                 self.params["Qtau"],
                 self.params["Qtau"],
                 self.params["Qtau"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qtd"],
+                self.params["Qtd"],
+                self.params["Qtd"],
+                self.params["Qtd"],
                 0,  # disturbance
                 0,
                 0,
@@ -149,14 +159,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
         R = np.diag(
             [
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
             ]
         )
         print("R: \n", R)
