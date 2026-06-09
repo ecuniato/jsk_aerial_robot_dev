@@ -21,10 +21,10 @@ controller:
     a_max: 3.15  # 180 deg + a little bit
     a_min: -3.15
 
-    alpha_velocity_min: -10  # rad/s
-    alpha_velocity_max: 10
-    thrust_velocity_min: -50  # N/s
-    thrust_velocity_max: 50
+    alpha_velocity_min: -5  # rad/s
+    alpha_velocity_max: 5
+    thrust_velocity_min: -100  # N/s
+    thrust_velocity_max: 100
 
     # params for the cost function
     Qp_xy: 300
@@ -37,13 +37,13 @@ controller:
     Qw_z: 5
     Qa: 0
     Qt: 0  # t is for thrust
-    Qad: 1
-    Qtd: 0.01  # t is for thrust
+    Qad: 0.1
+    Qtd: 0.0  # t is for thrust
     Qfu: 0 # generated body force
     Qtau: 0 # generated body torque
 
     Rtd_c: 0.0001  # thrust rate of change
-    Rad_c: 0.01 # arm angular velocity
+    Rad_c: 0.1 # arm angular velocity
 
     is_attitude_ctrl: false
     is_body_rate_ctrl: false

@@ -68,6 +68,14 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         rot_bt = self._get_rot_wb_ca(self.ee_q[0], self.ee_q[1], self.ee_q[2], self.ee_q[3])
         rot_tb = rot_bt.T
 
+        thrust_target = 0.0  # A bit less than hover
+        actuators_target = -ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
+        target_gain = 0.6
+
+        nullspace_proj = ca.DM.eye(8) # ignore for now
+        actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - target_gain * ca.mtimes(nullspace_proj, actuators_target) )
+        print("Actuator velocity y: \n", actuator_velocity_y)
+
         state_y = ca.vertcat(
             self.p + rot_wb @ self.ee_p,
             self.v + rot_wb @ skew_w @ self.ee_p,
@@ -82,24 +90,14 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
             self.tau_u_b_s,
             self.ad_s,
             self.ftd_s,
+            # actuator_velocity_y[4:8],  # servo velocity
+            # actuator_velocity_y[0:4],  # thrust velocity
             self.fds_w,
             self.tau_ds_b,
         )
 
         state_y_e = state_y
 
-        thrust_target = 0.0  # A bit less than hover
-        actuators_target = -ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
-        target_gain = 0.6
-        t_rotor = 0.0942  # FIX: do not hardcode Time constant of rotor
-        t_servo = 0.0480  # FIX: do not hardcode Time constant of servo motor
-        time_constant_matrix = ca.diag(ca.vertcat([t_rotor]*4, [t_servo]*4))
-        print("Time constant matrix: \n", time_constant_matrix)
-        # print("Nullspace projector: \n", nullspace_proj)
-
-        # control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, actuators_target)) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s)
-        # control_y = ca.simplify(target_gain * ca.mtimes(ca.mtimes(time_constant_matrix, nullspace_proj), actuators_target) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
-        # print("Control y: \n", type(control_y))
         control_y = ca.vertcat(
             self.ftd_c - self.ftd_s,
             self.ad_c - self.ad_s,

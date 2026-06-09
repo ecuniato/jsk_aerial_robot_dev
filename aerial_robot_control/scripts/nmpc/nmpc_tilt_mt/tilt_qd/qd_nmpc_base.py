@@ -769,15 +769,15 @@ class QDNMPCBase(RecedingHorizonBase):
             ocp.constraints.ubx_e = np.append(ocp.constraints.ubx_e,
                 [self.params["thrust_max"]] * self.num_rotors)
             
-        # if self.actuator_second_order:
-        #     alpha_velocity_idx_start_end = (27, 27 + self.num_rotors)
-        #     thrust_velocity_idx_start_end = (27 + self.num_rotors, 27 + 2 * self.num_rotors)
-        #     ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(alpha_velocity_idx_start_end[0], alpha_velocity_idx_start_end[1]))
-        #     ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(thrust_velocity_idx_start_end[0], thrust_velocity_idx_start_end[1]))
-        #     ocp.constraints.lbx = np.append(ocp.constraints.lbx, [self.params["alpha_velocity_min"]] * self.num_rotors)
-        #     ocp.constraints.lbx = np.append(ocp.constraints.lbx, [self.params["thrust_velocity_min"]] * self.num_rotors)
-        #     ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["alpha_velocity_max"]] * self.num_rotors)
-        #     ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["thrust_velocity_max"]] * self.num_rotors)
+        if self.actuator_second_order:
+            alpha_velocity_idx_start_end = (27, 27 + self.num_rotors)
+            thrust_velocity_idx_start_end = (27 + self.num_rotors, 27 + 2 * self.num_rotors)
+            ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(alpha_velocity_idx_start_end[0], alpha_velocity_idx_start_end[1]))
+            ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(thrust_velocity_idx_start_end[0], thrust_velocity_idx_start_end[1]))
+            ocp.constraints.lbx = np.append(ocp.constraints.lbx, [self.params["alpha_velocity_min"]] * self.num_rotors)
+            ocp.constraints.lbx = np.append(ocp.constraints.lbx, [self.params["thrust_velocity_min"]] * self.num_rotors)
+            ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["alpha_velocity_max"]] * self.num_rotors)
+            ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["thrust_velocity_max"]] * self.num_rotors)
 
         if not self.actuator_second_order:
             # - Input box constraints bu
