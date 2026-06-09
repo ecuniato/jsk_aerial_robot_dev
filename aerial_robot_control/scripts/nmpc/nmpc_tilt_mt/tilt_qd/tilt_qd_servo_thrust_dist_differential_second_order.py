@@ -50,7 +50,13 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
             self.include_cog_dist_model,
         )
 
-    def get_cost_function(self, lin_acc_w=None, ang_acc_b=None, nullspace_proj=None):
+    def get_cost_function(
+        self,
+        lin_acc_w=None,
+        ang_acc_b=None,
+        nullspace_proj=None,
+        nullspace_proj_dot=None,
+    ):
         # fmt: off
         # Cost function
         # see https://docs.acados.org/python_interface/#acados_template.acados_ocp_cost.AcadosOcpCost for details
@@ -69,21 +75,21 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         rot_tb = rot_bt.T
 
         thrust_target = 0.0  # A bit less than hover
-        actuators_target = -ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
-        target_gain = 0.6
+        target_gain = 0.3
+        actuators_target = -target_gain*ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
 
-        nullspace_proj = ca.DM.eye(8) # ignore for now
-        actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - target_gain * ca.mtimes(nullspace_proj, actuators_target) )
+        # nullspace_proj = ca.DM.eye(8) # ignore for now
+        actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - ca.mtimes(nullspace_proj, actuators_target))
         print("Actuator velocity y: \n", actuator_velocity_y)
 
         state_y = ca.vertcat(
-            self.p + rot_wb @ self.ee_p,
-            self.v + rot_wb @ skew_w @ self.ee_p,
+            self.p,# + rot_wb @ self.ee_p,
+            self.v,# + rot_wb @ skew_w @ self.ee_p,
             self.qwr,
             qe_x + self.qxr,
             qe_y + self.qyr,
             qe_z + self.qzr,
-            rot_tb @ self.w,
+            self.w,
             self.a_s,
             self.ft_s,
             self.fu_b_s,
@@ -97,6 +103,13 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         )
 
         state_y_e = state_y
+
+        time_contant_matrix_inv = ca.diag(ca.vertcat([1/0.0942]*4, [1/0.0480]*4)) # FIX: do not hardcode Time constant of rotor and servo
+        actuators_target_jacobian = ca.jacobian(actuators_target, ca.vertcat(self.ft_s, self.a_s))
+        # control_y = ca.simplify(
+        #     ca.mtimes(time_contant_matrix_inv,ca.vertcat(self.ftd_c - self.ftd_s, self.ad_c - self.ad_s))
+        #     - ca.mtimes(nullspace_proj_dot,actuators_target)
+        #     - ca.mtimes(ca.mtimes(nullspace_proj,actuators_target_jacobian), ca.vertcat(self.ftd_s, self.ad_s)) )
 
         control_y = ca.vertcat(
             self.ftd_c - self.ftd_s,
@@ -214,10 +227,10 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        xr[:, 13] = a_ref[0]  # a1
-        xr[:, 14] = a_ref[1]  # a2
-        xr[:, 15] = a_ref[2]  # a3
-        xr[:, 16] = a_ref[3]  # a4
+        # xr[:, 13] = a_ref[0]  # a1
+        # xr[:, 14] = a_ref[1]  # a2
+        # xr[:, 15] = a_ref[2]  # a3
+        # xr[:, 16] = a_ref[3]  # a4
         xr[:, 17] = ft_ref[0]  # f1
         xr[:, 18] = ft_ref[1]  # f2
         xr[:, 19] = ft_ref[2]  # f3

@@ -422,6 +422,17 @@ class QDNMPCBase(RecedingHorizonBase):
             pseudo_inverse_allocation_matrix = ca.mtimes(allocation_matrix.T, ca.inv(ca.mtimes(allocation_matrix, allocation_matrix.T) + 1e-6 * ca.SX.eye(allocation_matrix.shape[0])))  # Damped pseudo-inverse for better numerical stability
             nullspace_projector = ca.simplify(ca.SX.eye(allocation_matrix.shape[1]) - ca.mtimes(pseudo_inverse_allocation_matrix, allocation_matrix))
 
+            stacked_actuator_velocities = ca.vertcat(self.ftd_s, self.ad_s)
+            x = stacked_actuator_states
+            xdot = stacked_actuator_velocities
+            P = nullspace_projector
+
+            nullspace_projector_dot = ca.reshape(
+                ca.jtimes(ca.vec(P), x, xdot),
+                P.shape[0],
+                P.shape[1]
+            )
+
         if not self.actuator_second_order:
             if self.include_servo_model:
                 servo_velocity = (self.a_c - self.a_s) / t_servo  # Time constant of servo motor
@@ -497,8 +508,10 @@ class QDNMPCBase(RecedingHorizonBase):
             )
 
             state_y, state_y_e, control_y = self.get_cost_function(lin_acc_w=lin_acc_w, ang_acc_b=ang_acc_b)
-        elif self.differential_allocation:
+        elif self.differential_allocation and not self.actuator_second_order:
             state_y, state_y_e, control_y = self.get_cost_function(nullspace_proj=nullspace_projector)
+        elif self.differential_allocation and self.actuator_second_order:
+            state_y, state_y_e, control_y = self.get_cost_function(nullspace_proj=nullspace_projector, nullspace_proj_dot=nullspace_projector_dot)
         else:
             state_y, state_y_e, control_y = self.get_cost_function()
 
