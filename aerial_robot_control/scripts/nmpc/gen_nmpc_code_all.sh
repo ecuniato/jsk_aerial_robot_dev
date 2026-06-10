@@ -13,7 +13,8 @@ MODELS=(
     # NMPCTiltQdServoDist
     # NMPCTiltQdServoImpedance
     # NMPCTiltQdServoThrustDist
-    NMPCTiltQdServoThrustDistDiff
+    # NMPCTiltQdServoThrustDistDiff
+    NMPCTiltQdServoThrustDistDiffSecondOrder
     # NMPCTiltQdServoThrustImpedance
     # NMPCTiltTriServo
     # NMPCTiltBiServoDist

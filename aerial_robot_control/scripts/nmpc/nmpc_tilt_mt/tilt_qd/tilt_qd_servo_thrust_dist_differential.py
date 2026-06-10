@@ -31,6 +31,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         self.include_impedance = False
         self.differential_allocation = True
         self.actuator_second_order = False
+        self.use_nullspace_goal = False
 
         # Read parameters from configuration file in the robot's package
         self.read_params(
@@ -225,17 +226,6 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
         ur = np.zeros([nn, nu])
-        # ur[:, 0] = ftd_ref[0]  # f1d
-        # ur[:, 1] = ftd_ref[1]  # f2d
-        # ur[:, 2] = ftd_ref[2]  # f3d
-        # ur[:, 3] = ftd_ref[3]  # f4d
-        # ur[:, 4] = ad_ref[0]  # a1d
-        # ur[:, 5] = ad_ref[1]  # a2d
-        # ur[:, 6] = ad_ref[2]  # a3d
-        # ur[:, 7] = ad_ref[3]  # a4d
-
-        # print("Reference state xr: \n", xr)
-        # print("Target position: ", target_xyz)
 
         return xr, ur
 

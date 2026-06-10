@@ -1,5 +1,5 @@
-#ifndef TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_NMPC_CONTROLLER_H
-#define TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_NMPC_CONTROLLER_H
+#ifndef TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_SECOND_ORDER_NMPC_CONTROLLER_H
+#define TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_SECOND_ORDER_NMPC_CONTROLLER_H
 
 #include "aerial_robot_control/nmpc/tilt_mt_servo_dist_nmpc_controller.h"
 
@@ -11,7 +11,7 @@ namespace aerial_robot_control
 namespace nmpc
 {
 
-class TiltMtServoThrustDistDifferentialNMPC : public nmpc::TiltMtServoDistNMPC
+class TiltMtServoThrustDistDifferentialSecondOrderNMPC : public nmpc::TiltMtServoDistNMPC
 {
 public:
   void initialize(ros::NodeHandle nh, ros::NodeHandle nhp,
@@ -27,10 +27,31 @@ protected:
 
   Eigen::VectorXd internal_wrench_b_;
 
+  std::vector<double> prev_joint_angle_;
+  std::vector<double> prev_joint_angle_vel_estimate_;
+  std::vector<double> prev_thrust_meas_;
+  std::vector<double> prev_thrust_vel_estimate_;
+
+  double servo_angle_velocity_min_, servo_angle_velocity_max_;
+  double thrust_velocity_min_, thrust_velocity_max_;
+  double servo_angle_c_velocity_min_, servo_angle_c_velocity_max_;
+  double thrust_c_velocity_min_, thrust_c_velocity_max_;
+
+  std::vector<double> uo_prev_;
+
   inline void initActuatorStates() override
   {
     nmpc::TiltMtServoNMPC::initActuatorStates();
     thrust_meas_.resize(motor_num_, 0.0);
+
+    internal_wrench_b_ = Eigen::VectorXd::Zero(6);
+
+    prev_joint_angle_.resize(joint_num_, 0.0);
+    prev_joint_angle_vel_estimate_.resize(joint_num_, 0.0);
+    prev_thrust_meas_.resize(motor_num_, 0.0);
+    prev_thrust_vel_estimate_.resize(motor_num_, 0.0);
+
+    uo_prev_.resize(motor_num_ + joint_num_, 0.0);
   }
 
   void initGeneralParams() override;
@@ -50,10 +71,12 @@ protected:
   void cfgNMPCCallback(NMPCConfig& config, uint32_t level) override;
 
   void computeInternalWrenchB();
+
+  double getCommand(int idx_u, double T_horizon = 0.0) override;
 };
 
 }  // namespace nmpc
 
 }  // namespace aerial_robot_control
 
-#endif  // TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_NMPC_CONTROLLER_H
+#endif  // TILT_MT_SERVO_THRUST_DIST_DIFFERENTIAL_SECOND_ORDER_NMPC_CONTROLLER_H

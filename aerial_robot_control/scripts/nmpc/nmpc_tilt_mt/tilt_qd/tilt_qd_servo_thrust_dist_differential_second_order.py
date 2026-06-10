@@ -17,7 +17,7 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
 
     def __init__(self, build: bool = True, phys=phys_omni):
         # Model name
-        self.model_name = "tilt_qd_servo_thrust_mdl"
+        self.model_name = "tilt_qd_servo_thrust_dist_differential_second_order_mdl"
         self.phys = phys
 
         self.tilt = True
@@ -87,13 +87,13 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
             actuator_velocity_y = ca.vertcat(self.ftd_s, self.ad_s)
 
         state_y = ca.vertcat(
-            self.p,# + rot_wb @ self.ee_p,
-            self.v,# + rot_wb @ skew_w @ self.ee_p,
+            self.p + rot_wb @ self.ee_p,
+            self.v + rot_wb @ skew_w @ self.ee_p,
             self.qwr,
             qe_x + self.qxr,
             qe_y + self.qyr,
             qe_z + self.qzr,
-            self.w,
+            rot_tb @ self.w,
             self.a_s,
             self.ft_s,
             self.fu_b_s,
@@ -231,7 +231,7 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        # No reference for servo angles (idx: 13-16)
+        # No reference for servo angles (idx: 13, 14, 15, 16)
         xr[:, 17] = ft_ref[0]  # f1
         xr[:, 18] = ft_ref[1]  # f2
         xr[:, 19] = ft_ref[2]  # f3

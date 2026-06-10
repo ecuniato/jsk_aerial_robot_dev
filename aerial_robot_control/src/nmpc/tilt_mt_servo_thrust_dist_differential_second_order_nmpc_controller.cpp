@@ -2,40 +2,37 @@
 // Created by jinjie on 24/07/31.
 //
 
-#include "aerial_robot_control/nmpc/tilt_mt_servo_thrust_dist_differential_nmpc_controller.h"
+#include "aerial_robot_control/nmpc/tilt_mt_servo_thrust_dist_differential_second_order_nmpc_controller.h"
 
 using namespace aerial_robot_control;
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::initialize(ros::NodeHandle nh, ros::NodeHandle nhp,
-                                                             boost::shared_ptr<aerial_robot_model::RobotModel> robot_model,
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initialize(ros::NodeHandle nh, ros::NodeHandle nhp,
+                                                                        boost::shared_ptr<aerial_robot_model::RobotModel> robot_model,
                                                  boost::shared_ptr<aerial_robot_estimation::StateEstimator> estimator,
                                                  boost::shared_ptr<aerial_robot_navigation::BaseNavigator> navigator,
                                                  double ctrl_loop_du)
 {
   TiltMtServoDistNMPC::initialize(nh, nhp, robot_model, estimator, navigator, ctrl_loop_du);
 
-  sub_esc_telem_ = nh_.subscribe("esc_telem", 1, &TiltMtServoThrustDistDifferentialNMPC::callbackESCTelem, this);
+  sub_esc_telem_ = nh_.subscribe("esc_telem", 1, &TiltMtServoThrustDistDifferentialSecondOrderNMPC::callbackESCTelem, this);
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::initGeneralParams()
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initGeneralParams()
 {
   TiltMtServoDistNMPC::initGeneralParams();
 
   ros::NodeHandle motor_nh(nh_, "motor_info");
   getParam<double>(motor_nh, "krpm_square_to_thrust_ratio", krpm_square_to_thrust_ratio_, 0.0);
   getParam<double>(motor_nh, "krpm_square_to_thrust_bias", krpm_square_to_thrust_bias_, 0.0);
-
-  thrust_meas_.resize(motor_num_, 0.0);
-  internal_wrench_b_ = Eigen::VectorXd::Zero(6);
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCCostW()
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCCostW()
 {
   ros::NodeHandle control_nh(nh_, "controller");
   ros::NodeHandle nmpc_nh(control_nh, "nmpc");
 
   /* control parameters with dynamic reconfigure */
-  double Qp_xy, Qp_z, Qv_xy, Qv_z, Qq_xy, Qq_z, Qw_xy, Qw_z, Qa, Qt, Qfu, Qtau, Rtc_d, Rac_d;
+  double Qp_xy, Qp_z, Qv_xy, Qv_z, Qq_xy, Qq_z, Qw_xy, Qw_z, Qa, Qt, Qfu, Qtau, Qad, Qtd, Rtc_d, Rac_d;
   getParam<double>(nmpc_nh, "Qp_xy", Qp_xy, 300);
   getParam<double>(nmpc_nh, "Qp_z", Qp_z, 400);
   getParam<double>(nmpc_nh, "Qv_xy", Qv_xy, 10);
@@ -48,6 +45,8 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCCostW()
   getParam<double>(nmpc_nh, "Qt", Qt, 1);
   getParam<double>(nmpc_nh, "Qfu", Qfu, 0);
   getParam<double>(nmpc_nh, "Qtau", Qtau, 0);
+  getParam<double>(nmpc_nh, "Qad", Qad, 0);
+  getParam<double>(nmpc_nh, "Qtd", Qtd, 0);
 
   getParam<double>(nmpc_nh, "Rtc_d", Rtc_d, 1);
   getParam<double>(nmpc_nh, "Rac_d", Rac_d, 250);
@@ -67,7 +66,8 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCCostW()
   mpc_solver_ptr_->setCostWDiagElement(11, Qw_xy);
   mpc_solver_ptr_->setCostWDiagElement(12, Qw_z);
   for (int i = 13; i < 13 + joint_num_; ++i)
-    mpc_solver_ptr_->setCostWDiagElement(i, Qa);
+    // mpc_solver_ptr_->setCostWDiagElement(i, Qa);
+    mpc_solver_ptr_->setCostWDiagElement(i, 0);  // Should not be penalized, as the reference is unstable and not necessary
   for (int i = 13 + joint_num_; i < 13 + joint_num_ + motor_num_; ++i)
     mpc_solver_ptr_->setCostWDiagElement(i, Qt);
 
@@ -79,6 +79,13 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCCostW()
   mpc_solver_ptr_->setCostWDiagElement(13 + joint_num_ + motor_num_ + 4, Qtau);
   mpc_solver_ptr_->setCostWDiagElement(13 + joint_num_ + motor_num_ + 5, Qtau);
 
+  // Second-order servo and thrust cost
+  int idx_second_order_dyn_start = 13 + joint_num_ + motor_num_ + 6;
+  for (int i = idx_second_order_dyn_start; i < idx_second_order_dyn_start + joint_num_; ++i)
+    mpc_solver_ptr_->setCostWDiagElement(i, Qad);
+  for (int i = idx_second_order_dyn_start + joint_num_; i < idx_second_order_dyn_start + motor_num_ + joint_num_; ++i)
+    mpc_solver_ptr_->setCostWDiagElement(i, Qtd);
+
   // Control input cost
   for (int i = mpc_solver_ptr_->NX_; i < mpc_solver_ptr_->NX_ + motor_num_; ++i)
     mpc_solver_ptr_->setCostWDiagElement(i, Rtc_d, false);
@@ -86,7 +93,7 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCCostW()
     mpc_solver_ptr_->setCostWDiagElement(i, Rac_d, false);
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCConstraints()
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCConstraints()
 {
   ros::NodeHandle control_nh(nh_, "controller");
   ros::NodeHandle nmpc_nh(control_nh, "nmpc");
@@ -104,6 +111,19 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCConstraints()
   //  TODO: this should be set in flight_navigation; don't know why set 0.2 results solver failure
   getParam<double>(control_nh, "vel_limit_takeoff", vel_limit_takeoff_, 1.0);  // m/s
 
+  // For second-order dynamics constraints
+  getParam<double>(nmpc_nh, "alpha_velocity_max", servo_angle_velocity_max_, 5.0);
+  getParam<double>(nmpc_nh, "alpha_velocity_min", servo_angle_velocity_min_, -5.0);
+  getParam<double>(nmpc_nh, "thrust_velocity_max", thrust_velocity_max_, -100.0);
+  getParam<double>(nmpc_nh, "thrust_velocity_min", thrust_velocity_min_, 100.0);
+  
+
+  // For control input rate constraints
+  getParam<double>(nmpc_nh, "alpha_c_velocity_max", servo_angle_c_velocity_max_, 10.0);
+  getParam<double>(nmpc_nh, "alpha_c_velocity_min", servo_angle_c_velocity_min_, -10.0);
+  getParam<double>(nmpc_nh, "thrust_c_velocity_max", thrust_c_velocity_max_, 200.0);
+  getParam<double>(nmpc_nh, "thrust_c_velocity_min", thrust_c_velocity_min_, -200.0);
+
   // lbx and ubx
   std::vector<int> idxbx = mpc_solver_ptr_->getConstraintsIdxbx();
   std::vector<int> idxbx_desired = { 3, 4, 5, 10, 11, 12 };
@@ -115,6 +135,17 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCConstraints()
   for (int i = 0; i < motor_num_; i++)
   {
     idxbx_desired[6 + joint_num_ + i] = 13 + joint_num_ + i;
+  }
+
+  // For second-order dynamics constraints
+  idxbx_desired.resize(6 + joint_num_ + motor_num_ + joint_num_ + motor_num_);
+  for (int i = 0; i < joint_num_; i++)
+  {
+    idxbx_desired[6 + joint_num_ + motor_num_ + i] = 27 + i;
+  }
+  for (int i = 0; i < motor_num_; i++)
+  {
+    idxbx_desired[6 + joint_num_ + motor_num_ + joint_num_ + i] = 27 + joint_num_ + i;
   }
 
   if (idxbx.size() != idxbx_desired.size() || !std::equal(idxbx.begin(), idxbx.end(), idxbx_desired.begin()))
@@ -136,6 +167,21 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCConstraints()
     lbx[6 + joint_num_ + i] = thrust_ctrl_min_;
     ubx[6 + joint_num_ + i] = thrust_ctrl_max_;
   }
+
+  // For second-order dynamics constraints
+  lbx.resize(6 + joint_num_ + motor_num_ + joint_num_ + motor_num_);
+  ubx.resize(6 + joint_num_ + motor_num_ + joint_num_ + motor_num_);
+  for (int i = 0; i < joint_num_; i++)
+  {
+    lbx[6 + joint_num_ + motor_num_ + i] = servo_angle_velocity_min_;
+    ubx[6 + joint_num_ + motor_num_ + i] = servo_angle_velocity_max_;
+  }
+  for (int i = 0; i < motor_num_; i++)
+  {
+    lbx[6 + joint_num_ + motor_num_ + joint_num_ + i] = thrust_velocity_min_;
+    ubx[6 + joint_num_ + motor_num_ + joint_num_ + i] = thrust_velocity_max_;
+  }
+
   mpc_solver_ptr_->setConstraintsLbx(lbx);
   mpc_solver_ptr_->setConstraintsUbx(ubx);
 
@@ -165,23 +211,24 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::initNMPCConstraints()
     ROS_ERROR("idxbu is not equal to idxbu_desired, we cannot set constraints lbu and ubu!");
   }
 
+  // For control input rate constraints
   std::vector<double> lbu(motor_num_ + joint_num_, 0.0);
   std::vector<double> ubu(motor_num_ + joint_num_, 0.0);
   for (int i = 0; i < motor_num_; i++)
   {
-    lbu[i] = thrust_ctrl_min_;
-    ubu[i] = thrust_ctrl_max_;
+    lbu[i] = thrust_c_velocity_min_;
+    ubu[i] = thrust_c_velocity_max_;
   }
   for (int i = 0; i < joint_num_; i++)
   {
-    lbu[motor_num_ + i] = servo_angle_min_;
-    ubu[motor_num_ + i] = servo_angle_max_;
+    lbu[motor_num_ + i] = servo_angle_c_velocity_min_;
+    ubu[motor_num_ + i] = servo_angle_c_velocity_max_;
   }
   mpc_solver_ptr_->setConstraintsLbu(lbu);
   mpc_solver_ptr_->setConstraintsUbu(ubu);
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::callbackESCTelem(const spinal::ESCTelemetryArrayConstPtr& msg)
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::callbackESCTelem(const spinal::ESCTelemetryArrayConstPtr& msg)
 {  // TODO: support different motor number
   double krpm = (double)msg->esc_telemetry_1.rpm * 0.001;
   thrust_meas_[0] = krpm * krpm * krpm_square_to_thrust_ratio_ + krpm_square_to_thrust_bias_;
@@ -196,7 +243,7 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::callbackESCTelem(const spinal:
   thrust_meas_[3] = krpm * krpm * krpm_square_to_thrust_ratio_ + krpm_square_to_thrust_bias_;
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::allocateToXU(const tf::Vector3& ref_pos_i, const tf::Vector3& ref_vel_i,
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::allocateToXU(const tf::Vector3& ref_pos_i, const tf::Vector3& ref_vel_i,
                                                    const tf::Quaternion& ref_quat_ib, const tf::Vector3& ref_omega_b,
                                                    const Eigen::VectorXd& ref_wrench_b, vector<double>& x,
                                                    vector<double>& u)
@@ -232,7 +279,7 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::allocateToXU(const tf::Vector3
   x.at(13 + joint_num_ + motor_num_ + 5) = ref_wrench_b(5);
 }
 
-std::vector<double> nmpc::TiltMtServoThrustDistDifferentialNMPC::meas2VecX(bool is_modified_by_traj_frame)
+std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas2VecX(bool is_modified_by_traj_frame)
 {
   /* disturbance rejection */
   geometry_msgs::Vector3 external_force_w;     // default: 0, 0, 0
@@ -254,7 +301,6 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialNMPC::meas2VecX(bool 
 
   // Wrench as state
   computeInternalWrenchB();
-  int wrench_state_dim = 6;
   bx0[13 + joint_num_ + motor_num_ + 0] = internal_wrench_b_(0);
   bx0[13 + joint_num_ + motor_num_ + 1] = internal_wrench_b_(1);
   bx0[13 + joint_num_ + motor_num_ + 2] = internal_wrench_b_(2);
@@ -262,21 +308,57 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialNMPC::meas2VecX(bool 
   bx0[13 + joint_num_ + motor_num_ + 4] = internal_wrench_b_(4);
   bx0[13 + joint_num_ + motor_num_ + 5] = internal_wrench_b_(5);
 
+  // Derivate of actuators as state
+  for (int i = 0; i < joint_num_; i++)
+  {
+    // ==== MODEL ====
+    // double last_servo_angle_c = mpc_solver_ptr_->uo_.at(0).at(i + motor_num_);
+    // double servo_angle_velocity = (last_servo_angle_c - joint_angles_[i]) / t_servo_;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + i] = servo_angle_velocity;
+
+    // ==== NUMERICAL DERIVATIVE ====
+    // double joint_angle_derivative = (joint_angles_[i] - prev_joint_angles_[i]) / du_;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + i] = joint_angle_derivative;
+    // prev_joint_angles_[i] = joint_angles_[i];
+
+    // ==== FILTERED NUMERICAL DERIVATIVE ====
+    auto joint_angle_vel_estimate = 0.7 * prev_joint_angle_vel_estimate_.at(i) + 0.3 * (joint_angles_[i] - prev_joint_angle_.at(i)) / ctrl_loop_du_;
+    prev_joint_angle_.at(i) = joint_angles_[i];
+    prev_joint_angle_vel_estimate_.at(i) = joint_angle_vel_estimate;
+  }
+  for (int i = 0; i < motor_num_; i++)
+  {
+    // ==== MODEL ====
+    // double last_thrust_c = mpc_solver_ptr_->uo_.at(0).at(i);
+    // double thrust_velocity = (last_thrust_c - thrust_meas_[i]) / t_rotor_;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = thrust_velocity;
+
+    // ==== NUMERICAL DERIVATIVE ====
+    // double thrust_derivative = (thrust_meas_[i] - prev_thrust_meas_[i]) / du_;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = thrust_derivative;
+    // prev_thrust_meas_[i] = thrust_meas_[i];
+
+    // ==== FILTERED NUMERICAL DERIVATIVE ====
+    auto thrust_vel_estimate = 0.7 * prev_thrust_vel_estimate_.at(i) + 0.3 * (thrust_meas_[i] - prev_thrust_meas_[i]) / ctrl_loop_du_;
+    prev_thrust_meas_.at(i) = thrust_meas_[i];
+    prev_thrust_vel_estimate_.at(i) = thrust_vel_estimate;
+  }
+
   // Disturbance as state
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 0] = external_force_w.x;
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 1] = external_force_w.y;
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 2] = external_force_w.z;
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 3] = external_torque_cog.x;
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 4] = external_torque_cog.y;
-  bx0[13 + joint_num_ + motor_num_ + wrench_state_dim + 5] = external_torque_cog.z;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 0] = external_force_w.x;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 1] = external_force_w.y;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 2] = external_force_w.z;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 3] = external_torque_cog.x;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 4] = external_torque_cog.y;
+  bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 5] = external_torque_cog.z;
   return bx0;
 }
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::computeInternalWrenchB()
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::computeInternalWrenchB()
 {
   if (alloc_mat_.size() == 0 || thrust_meas_.size() != motor_num_)
   {
-    ROS_WARN("[NMPC] Allocation matrix is not set or thrust measurement size is not equal to motor number, we cannot compute internal wrench w, set it to zero!");
+    ROS_WARN("[NMPC] Allocation matrix is not set or thrust measurement size is not equal to motor number, we cannot compute internal wrench, set it to zero!");
     internal_wrench_b_ = Eigen::VectorXd::Zero(6);
     return;
   }
@@ -293,8 +375,18 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::computeInternalWrenchB()
   internal_wrench_b_ = alloc_mat_ * allocation_matrix_input;
 }
 
+double nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::getCommand(int idx_u, double T_horizon)
+{
+  // Integrate control input since it is defined as the servo angle and thrust velocity
+  double uo_derivative = mpc_solver_ptr_->uo_.at(0).at(idx_u);
+  // RESET?!?! to avoid blindly integrating?
+  double uo = uo_derivative * ctrl_loop_du_ + uo_prev_.at(idx_u);
+  uo_prev_.at(idx_u) = uo;
 
-void nmpc::TiltMtServoThrustDistDifferentialNMPC::cfgNMPCCallback(aerial_robot_control::NMPCConfig& config, uint32_t level)
+  return uo;
+}
+
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::cfgNMPCCallback(aerial_robot_control::NMPCConfig& config, uint32_t level)
 {
   using Levels = aerial_robot_msgs::DynamicReconfigureLevels;
   if (config.nmpc_flag)
@@ -374,6 +466,20 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::cfgNMPCCallback(aerial_robot_c
           ROS_INFO_STREAM("change Qtau for NMPC '" << config.Qtau << "'");
           break;
         }
+        case Levels::RECONFIGURE_NMPC_Q_AD: {
+          int idx_second_order_dyn_start = 13 + joint_num_ + motor_num_ + 6;
+          for (int i = idx_second_order_dyn_start; i < idx_second_order_dyn_start + joint_num_; ++i)
+            mpc_solver_ptr_->setCostWDiagElement(i, config.Qad);
+          ROS_INFO_STREAM("change Qad for NMPC '" << config.Qad << "'");
+          break;
+        }
+        case Levels::RECONFIGURE_NMPC_Q_TD: {
+          int idx_second_order_dyn_start = 13 + joint_num_ + motor_num_ + 6 + joint_num_;
+          for (int i = idx_second_order_dyn_start; i < idx_second_order_dyn_start + motor_num_; ++i)
+            mpc_solver_ptr_->setCostWDiagElement(i, config.Qtd);
+          ROS_INFO_STREAM("change Qtd for NMPC '" << config.Qtd << "'");
+          break;
+        }
         case Levels::RECONFIGURE_NMPC_R_TC_D: {
           for (int i = mpc_solver_ptr_->NX_; i < mpc_solver_ptr_->NX_ + motor_num_; ++i)
             mpc_solver_ptr_->setCostWDiagElement(i, config.Rtc_d, false);
@@ -401,4 +507,4 @@ void nmpc::TiltMtServoThrustDistDifferentialNMPC::cfgNMPCCallback(aerial_robot_c
 
 /* plugin registration */
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(aerial_robot_control::nmpc::TiltMtServoThrustDistDifferentialNMPC, aerial_robot_control::ControlBase);
+PLUGINLIB_EXPORT_CLASS(aerial_robot_control::nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC, aerial_robot_control::ControlBase);

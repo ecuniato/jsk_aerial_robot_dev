@@ -415,16 +415,17 @@ class QDNMPCBase(RecedingHorizonBase):
             pseudo_inverse_allocation_matrix = ca.mtimes(allocation_matrix.T, ca.inv(ca.mtimes(allocation_matrix, allocation_matrix.T) + 1e-6 * ca.SX.eye(allocation_matrix.shape[0])))  # Damped pseudo-inverse for better numerical stability
             nullspace_projector = ca.simplify(ca.SX.eye(allocation_matrix.shape[1]) - ca.mtimes(pseudo_inverse_allocation_matrix, allocation_matrix))
 
-            stacked_actuator_velocities = ca.vertcat(self.ftd_s, self.ad_s)
-            x = stacked_actuator_states
-            xdot = stacked_actuator_velocities
-            P = nullspace_projector
+            if self.actuator_second_order:
+                stacked_actuator_velocities = ca.vertcat(self.ftd_s, self.ad_s)
+                x = stacked_actuator_states
+                xdot = stacked_actuator_velocities
+                P = nullspace_projector
 
-            nullspace_projector_dot = ca.reshape(
-                ca.jtimes(ca.vec(P), x, xdot),
-                P.shape[0],
-                P.shape[1]
-            )
+                nullspace_projector_dot = ca.reshape(
+                    ca.jtimes(ca.vec(P), x, xdot),
+                    P.shape[0],
+                    P.shape[1]
+                )
 
         if not self.actuator_second_order:
             if self.include_servo_model:
@@ -515,6 +516,9 @@ class QDNMPCBase(RecedingHorizonBase):
         print("\nControl variables (u):")
         for i in range(controls.size()[0]):
             print(f"u[{i}]: {controls[i]}")
+        print("Dynamic equations (f_expl_expr):")
+        for i in range(ds.size()[0]):
+            print(f"ds[{i}]:\n{ds[i]}")
 
         # Assemble acados model
         model = AcadosModel()
@@ -527,12 +531,6 @@ class QDNMPCBase(RecedingHorizonBase):
         model.p = parameters
         model.cost_y_expr = ca.vertcat(state_y, control_y)  # NONLINEAR_LS
         model.cost_y_expr_e = state_y_e
-
-        # Print dynamic equations for debugging
-        print("Dynamic equations (f_expl_expr):")
-        for i in range(ds.size()[0]):
-            print(f"ds[{i}]:\n{ds[i]}")
-
 
         return model
         # fmt: on
@@ -777,7 +775,7 @@ class QDNMPCBase(RecedingHorizonBase):
             
         if self.actuator_second_order:
             # Constraints for actuator velocities (time-derivative of servo angles and thrusts)
-            alpha_velocity_idx_start_end = (27, 27 + self.num_rotors)
+            alpha_velocity_idx_start_end = (27, 27 + self.num_rotors)  # TODO adjust indices dynamically
             thrust_velocity_idx_start_end = (27 + self.num_rotors, 27 + 2 * self.num_rotors)
             ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(alpha_velocity_idx_start_end[0], alpha_velocity_idx_start_end[1]))
             ocp.constraints.idxbx = np.append(ocp.constraints.idxbx, np.arange(thrust_velocity_idx_start_end[0], thrust_velocity_idx_start_end[1]))
@@ -786,10 +784,17 @@ class QDNMPCBase(RecedingHorizonBase):
             ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["alpha_velocity_max"]] * self.num_rotors)
             ocp.constraints.ubx = np.append(ocp.constraints.ubx, [self.params["thrust_velocity_max"]] * self.num_rotors)
 
-        # Only have input constraints if not using second-order actuator dynamics.
-        # With second-order dynamics, the actuator velocities are states and are already constrained, and this is enough.
+            ocp.constraints.idxbx_e = np.append(ocp.constraints.idxbx_e, np.arange(alpha_velocity_idx_start_end[0], alpha_velocity_idx_start_end[1]))
+            ocp.constraints.idxbx_e = np.append(ocp.constraints.idxbx_e, np.arange(thrust_velocity_idx_start_end[0], thrust_velocity_idx_start_end[1]))
+            ocp.constraints.lbx_e = np.append(ocp.constraints.lbx_e, [self.params["alpha_velocity_min"]] * self.num_rotors)
+            ocp.constraints.lbx_e = np.append(ocp.constraints.lbx_e, [self.params["thrust_velocity_min"]] * self.num_rotors)
+            ocp.constraints.ubx_e = np.append(ocp.constraints.ubx_e, [self.params["alpha_velocity_max"]] * self.num_rotors)
+            ocp.constraints.ubx_e = np.append(ocp.constraints.ubx_e, [self.params["thrust_velocity_max"]] * self.num_rotors)
+        
+        # - Input box constraints bu
         if not self.actuator_second_order:
-            # - Input box constraints bu
+            # Only have input constraints if not using second-order actuator dynamics.
+            # With second-order dynamics, the actuator velocities are states and are already constrained, and this is enough.
             # TODO Potentially a good idea to omit the input constraint when set the equivalent state
             # -- Index for ft1c, ft2c, ..., ftNc
             ocp.constraints.idxbu = np.arange(0, self.num_rotors)
@@ -810,6 +815,11 @@ class QDNMPCBase(RecedingHorizonBase):
             if self.tilt:
                 ocp.constraints.ubu = np.append(ocp.constraints.ubu,
                     [self.params["a_max"]] * self.num_rotors)
+        else:
+            # With second-order actuator dynamics, the inputs are the time-derivatives of the actuator states, and we can set their bounds accordingly.
+            ocp.constraints.idxbu = np.arange(0, 2 * self.num_rotors)  # ftc_dot and ac_dot for all rotors
+            ocp.constraints.lbu = np.array([self.params["thrust_c_velocity_min"]] * self.num_rotors + [self.params["alpha_c_velocity_min"]] * self.num_rotors)
+            ocp.constraints.ubu = np.array([self.params["thrust_c_velocity_max"]] * self.num_rotors + [self.params["alpha_c_velocity_max"]] * self.num_rotors)
 
         # fmt: on
 

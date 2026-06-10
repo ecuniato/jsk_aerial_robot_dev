@@ -18,7 +18,10 @@
         <description>Nonlinear Model Predictive Control with Tilt Qd Servo Thrust Disturbance Model.</description>
     </class>
     <class type="aerial_robot_control::mpc_solver::TiltQdServoThrustDistDifferentialMdlMPCSolver" base_class_type="aerial_robot_control::mpc_solver::BaseMPCSolver">
-        <description>Nonlinear Model Predictive Control with Tilt Qd Servo Thrust Disturbance Model and Differential States and Wrench.</description>
+        <description>Nonlinear Model Predictive Control with Tilt Qd Servo Thrust Disturbance Model and Differential Wrench.</description>
+    </class>
+    <class type="aerial_robot_control::mpc_solver::TiltQdServoThrustDistDifferentialSecondOrderMdlMPCSolver" base_class_type="aerial_robot_control::mpc_solver::BaseMPCSolver">
+        <description>Nonlinear Model Predictive Control with Tilt Qd Servo Thrust Disturbance Model and Differential Wrench, Control and Second Order Servo and Thrust States.</description>
     </class>
     <class type="aerial_robot_control::mpc_solver::TiltQdServoThrustDistImpMdlMPCSolver" base_class_type="aerial_robot_control::mpc_solver::BaseMPCSolver">
         <description>Nonlinear Model Predictive Control with Tilt Qd Servo Thrust Disturbance Impedance Model.</description>

@@ -15,6 +15,7 @@
 #include "aerial_robot_control/nmpc/tilt_qd_servo_dist_imp_mdl/nmpc_solver.h"
 #include "aerial_robot_control/nmpc/tilt_qd_servo_thrust_dist_mdl/nmpc_solver.h"
 #include "aerial_robot_control/nmpc/tilt_qd_servo_thrust_dist_differential_mdl/nmpc_solver.h"
+#include "aerial_robot_control/nmpc/tilt_qd_servo_thrust_dist_differential_second_order_mdl/nmpc_solver.h"
 #include "aerial_robot_control/nmpc/tilt_qd_servo_thrust_dist_imp_mdl/nmpc_solver.h"
 
 // tilt tri-rotor
@@ -36,6 +37,8 @@ PLUGINLIB_EXPORT_CLASS(aerial_robot_control::mpc_solver::TiltQdServoDistImpMdlMP
 PLUGINLIB_EXPORT_CLASS(aerial_robot_control::mpc_solver::TiltQdServoThrustDistMdlMPCSolver,
                        aerial_robot_control::mpc_solver::BaseMPCSolver)
 PLUGINLIB_EXPORT_CLASS(aerial_robot_control::mpc_solver::TiltQdServoThrustDistDifferentialMdlMPCSolver,
+                       aerial_robot_control::mpc_solver::BaseMPCSolver)
+PLUGINLIB_EXPORT_CLASS(aerial_robot_control::mpc_solver::TiltQdServoThrustDistDifferentialSecondOrderMdlMPCSolver,
                        aerial_robot_control::mpc_solver::BaseMPCSolver)
 PLUGINLIB_EXPORT_CLASS(aerial_robot_control::mpc_solver::TiltQdServoThrustDistImpMdlMPCSolver,
                        aerial_robot_control::mpc_solver::BaseMPCSolver)
