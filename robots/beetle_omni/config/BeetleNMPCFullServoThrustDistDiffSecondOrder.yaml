@@ -26,6 +26,12 @@ controller:
     thrust_velocity_min: -100  # N/s
     thrust_velocity_max: 100
 
+    # Just for safety, pretty much double what the real state limits are.
+    alpha_c_velocity_min: -10  # rad/s
+    alpha_c_velocity_max: 10
+    thrust_c_velocity_min: -200  # N/s
+    thrust_c_velocity_max: 200
+
     # params for the cost function
     Qp_xy: 300
     Qp_z: 400

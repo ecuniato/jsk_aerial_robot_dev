@@ -810,6 +810,11 @@ class QDNMPCBase(RecedingHorizonBase):
             if self.tilt:
                 ocp.constraints.ubu = np.append(ocp.constraints.ubu,
                     [self.params["a_max"]] * self.num_rotors)
+        else:
+            # With second-order actuator dynamics, the inputs are the time-derivatives of the actuator states, and we can set their bounds accordingly.
+            ocp.constraints.idxbu = np.arange(0, 2 * self.num_rotors)  # ftc_dot and ac_dot for all rotors
+            ocp.constraints.lbu = np.array([self.params["thrust_c_velocity_min"]] * self.num_rotors + [self.params["alpha_c_velocity_min"]] * self.num_rotors)
+            ocp.constraints.ubu = np.array([self.params["thrust_c_velocity_max"]] * self.num_rotors + [self.params["alpha_c_velocity_max"]] * self.num_rotors)
 
         # fmt: on
 
