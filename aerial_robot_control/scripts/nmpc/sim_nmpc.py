@@ -35,6 +35,9 @@ from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust_dist import NMPCTiltQdServoThrust
 from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust_dist_differential import (
     NMPCTiltQdServoThrustDistDiff,
 )
+from nmpc_tilt_mt.tilt_qd.tilt_qd_servo_thrust_dist_differential_second_order import (
+    NMPCTiltQdServoThrustDistDiffSecondOrder,
+)
 from nmpc_tilt_mt.archive.tilt_qd_servo_thrust_drag import NMPCTiltQdServoThrustDrag
 
 # Birotor
@@ -69,6 +72,8 @@ def main(args):
             nmpc = NMPCTiltQdServoThrustDist(phys=phys_omni)
         elif args.model == 23:
             nmpc = NMPCTiltQdServoThrustDistDiff(phys=phys_omni)
+        elif args.model == 24:
+            nmpc = NMPCTiltQdServoThrustDistDiffSecondOrder(phys=phys_omni)
             alpha_integ = np.zeros(4)
             ft_integ = np.zeros(4)
 
@@ -214,15 +219,22 @@ def main(args):
     u_cmd = u_init
     t_ctl = 0.0
     x_now_sim = x_init_sim
+
     for i in range(N_sim):
-        velocity_commands = np.zeros(nu)
         # --------- Update time ---------
         t_now = i * ts_sim
         t_ctl += ts_sim
 
         # --------- Update state estimation ---------
         # Assemble state from simulation and disturbance estimation
-        if nmpc.include_cog_dist_model and nmpc.differential_allocation:
+        if (
+            nmpc.include_cog_dist_model
+            and nmpc.differential_allocation
+            and nmpc.actuator_second_order
+        ):
+            x_now = np.zeros(nx)
+            x_now[: nx - 12 - 8] = deepcopy(x_now_sim[: nx - 12 - 8])
+        elif nmpc.include_cog_dist_model and nmpc.differential_allocation:
             x_now = np.zeros(nx)
             x_now[: nx - 12] = deepcopy(x_now_sim[: nx - 12])
         elif nmpc.include_cog_dist_model or nmpc.differential_allocation:
@@ -241,6 +253,17 @@ def main(args):
                 tilt_angles, thrusts
             )
             x_now[21:27] = current_body_wrench.flatten()
+        if nmpc.actuator_second_order:
+            # We need to estimate the current servo and thrust derivatives for the second-order model
+            a_c = u_cmd[4:8]  # current servo angle command
+            ft_c = u_cmd[0:4]  # current thrust command
+            ad_s = (a_c - x_now_sim[13:17]) / t_servo_sim
+            ftd_s = (ft_c - x_now_sim[17:21]) / t_rotor_sim
+            x_now[27:31] = deepcopy(ad_s)  # current servo angle derivatives
+            x_now[31:35] = deepcopy(ftd_s)  # current thrust derivatives
+            # add gaussian noise
+            x_now[27:31] += np.random.normal(0, 0.1, 4)
+            x_now[31:35] += np.random.normal(0, 1, 4)
 
         # Access from less indices
         if (nmpc.include_thrust_model and not nmpc.include_servo_model) and (
@@ -351,10 +374,9 @@ def main(args):
             # Compute control feedback and take the first action
             try:
                 u_cmd = ocp_solver.solve_for_x0(x_now)
-
                 x_opt = ocp_solver.get(0, "x")
-                u_opt = ocp_solver.get(0, "u")
 
+                # DEBUG print
                 # print("Current state controller - sim:")
                 # for idx in range(nx):
                 #     if idx < len(x_now_sim):
@@ -368,15 +390,46 @@ def main(args):
                 #             + f" --- optimal: {x_opt[idx]:.4f}"
                 #             + f" --- setpoint: {xr[0, idx]:.4f}"
                 #         )
+                # print("Control command: ")
+                # for idx in range(nu):
+                #     print(
+                #         f"u[{idx}]: optimal: {u_cmd[idx]:.4f} --- setpoint: {ur[0, idx]:.4f}"
+                #     )
 
-                # print("Optimal control u_opt: \n", u_opt)
-                velocity_commands = u_opt.copy()
-                # cost = ocp_solver.get_cost()
-                # print("Cost:", cost)
+                if nmpc.actuator_second_order:
+                    ft_integ += u_cmd[0:4].copy() * ts_ctrl
+                    u_cmd[0:4] = ft_integ.copy()
+                    alpha_integ += u_cmd[4:8].copy() * ts_ctrl
+                    u_cmd[4:8] = alpha_integ.copy()
+
+                    # DEBUG print
+                    # print("Control command after integration: ")
+                    # for idx in range(nu):
+                    #     print(f"u[{idx}]: optimal: {u_cmd[idx]:.4f}")
+
             except Exception as e:
                 print(
-                    f"Round {i}: acados ocp_solver returned status {ocp_solver.status}. Exiting."
+                    f"Round {i}: acados ocp_solver returned status {ocp_solver.status}.\n Exception: {e}.\n Exiting."
                 )
+                # Debug print the trajectories for analysis if something goes wrong
+                N = ocp_solver.acados_ocp.dims.N
+
+                x_traj = [ocp_solver.get(i, "x") for i in range(N + 1)]
+                u_traj = [ocp_solver.get(i, "u") for i in range(N)]
+
+                print("State trajectory:")
+                for idx in range(nx):
+                    print(
+                        f"x[{idx}]: "
+                        + "  ".join(f"{x_traj[j][idx]:.4f}" for j in range(N + 1))
+                    )
+
+                print("Control trajectory:")
+                for idx in range(nu):
+                    print(
+                        f"u[{idx}]: "
+                        + "  ".join(f"{u_traj[j][idx]:.4f}" for j in range(N))
+                    )
                 break
 
         comp_time_end = time.time()
@@ -384,92 +437,21 @@ def main(args):
 
         if args.arch == "qd":
             # Use previous servo angle as reference
-            # if type(nmpc) is NMPCTiltQdNoServoAcCost:
-            #     nmpc.update_a_prev(
-            #         u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
-            #     )
-
-            current_servo_angle = x_now[13:17]
-            current_thrust = x_now[17:21]
-            differential_allocation_mat = (
-                reference_generator.compute_differential_allocation_matrix(
-                    current_servo_angle, current_thrust
-                )
-            )
-            # print("Differential allocation matrix: \n", differential_allocation_mat)
-
-            try:
-
-                differential_allocation_mat_pinv = np.linalg.pinv(
-                    differential_allocation_mat
-                )
-
-                # print(
-                #     "Pseudoinverse of the allocation matrix: \n",
-                #     differential_allocation_mat_pinv,
-                # )
-
-                # Compute nullspace projection matrix
-                nullspace_projection = (
-                    np.eye(8)
-                    - differential_allocation_mat_pinv @ differential_allocation_mat
-                )
-
-                # print(
-                #     "Nullspace projection matrix: \n",
-                #     nullspace_projection,
-                # )
-
-                # current_servo_angle = np.zeros_like(current_servo_angle)
-                current_thrust = np.zeros_like(current_thrust)
-                optimization_objective = np.concatenate(
-                    (current_thrust, current_servo_angle)
-                )
-                # print(
-                #     "Optimization objective (current thrusts and servo angles): \n",
-                #     optimization_objective,
-                # )
-
-                # u_cmd -= 1.0 * nullspace_projection @ optimization_objective
-                # print(
-                #     "Nullspace optimization command: \n",
-                #     1 * nullspace_projection @ optimization_objective,
-                # )
-            except np.linalg.LinAlgError:
-                print(
-                    "Singular allocation matrix encountered. Skipping nullspace optimization for this step."
+            if type(nmpc) is NMPCTiltQdNoServoAcCost:
+                nmpc.update_a_prev(
+                    u_cmd.item(4), u_cmd.item(5), u_cmd.item(6), u_cmd.item(7)
                 )
 
             # Use servo angle derivative as state and therefore integrate servo angle command
             if nmpc.include_servo_derivative:
                 alpha_integ += u_cmd[4:] * ts_ctrl
                 u_cmd[4:] = alpha_integ  # convert from delta input to real input
-            # if nmpc.differential_allocation:
-            #     u_cmd = np.zeros_like(u_cmd)
-            #     u_cmd[7] = 0.1
-            #     alpha_integ += u_cmd[4:8].copy() * 0.0480
-            #     u_cmd[4:8] = alpha_integ.copy()
-            #     ft_integ += u_cmd[0:4].copy() * 0.0942
-            #     u_cmd[0:4] = ft_integ.copy()
-            # tilt_rate_limit = 4.0  # rad/s
-            # u_cmd[4:8] = np.clip(
-            #     u_cmd[4:8],
-            #     -tilt_rate_limit * 0.0480 + current_servo_angle,
-            #     tilt_rate_limit * 0.0480 + current_servo_angle,
-            # )
-            # thrust_rate_limit = 50.0  # N/s
-            # u_cmd[0:4] = np.clip(
-            #     u_cmd[0:4],
-            #     -thrust_rate_limit * 0.0942 + current_thrust,
-            #     thrust_rate_limit * 0.0942 + current_thrust,
-            # )
 
         print(f"Current time: {t_now:.4f} s")
 
         # --------- Update simulation ----------
         sim_solver.set("x", x_now_sim.copy())
         sim_solver.set("u", u_cmd.copy())
-        # print("Sim command u_cmd: \n", u_cmd)
 
         status = sim_solver.solve()
         if status != 0:
@@ -483,10 +465,17 @@ def main(args):
         x_history.append(x_now_sim.copy())
         u_history.append(u_cmd.copy())
 
-        # --------- Update visualizer ----------
-        viz.update(
-            i, x_now_sim, u_cmd.copy()
-        )  # Note: The recording frequency of u_cmd is the same as ts_sim
+        if nmpc.actuator_second_order:
+            # In place of the servo and thrust commands, visualize their derivatives for better insight
+            tilt_vel = x_now[27:31].copy()
+            ft_vel = x_now[31:35].copy()
+            actuator_vel = np.concatenate((ft_vel, tilt_vel))
+            # --------- Update visualizer ----------
+            viz.update(
+                i, x_now_sim, actuator_vel.copy()
+            )  # Note: The recording frequency of u_cmd is the same as ts_sim
+        else:
+            viz.update(i, x_now_sim, u_cmd.copy())
 
     # ========== Visualize ==========
     if not args.no_viz:

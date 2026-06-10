@@ -204,12 +204,6 @@ class QDNMPCReferenceGenerator:
         ad_ref = [0.0, 0.0, 0.0, 0.0]  # Reference servo angle derivatives
         ftd_ref = [0.0, 0.0, 0.0, 0.0]  # Reference thrust derivatives
 
-        # Reference ad to bring angles to 0 smoothly
-        # for i in range(4):
-        #     ad_ref[i] = -1.0 * current_angles[i]
-
-        # print("Target ad_ref: \n", ad_ref)
-
         # Assemble reference trajectories in controller file since their definition is
         # closely related to the cost function
         # xr, ur = self.nmpc.get_reference(target_xyz, target_qwxyz, ft_ref, a_ref)

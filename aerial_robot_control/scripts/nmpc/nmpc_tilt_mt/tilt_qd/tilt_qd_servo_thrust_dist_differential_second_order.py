@@ -7,7 +7,7 @@ from .fake_sensor import FakeSensor
 from . import phys_param_beetle_omni as phys_omni
 
 
-class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
+class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
     """
     Controller Name: Tiltable Quadrotor NMPC including Servo and Thrust Model as well as CoG Disturbance
     The controller itself is constructed in base class. The control inputs are the rates of the tilt and thrust commands.
@@ -17,7 +17,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
     def __init__(self, build: bool = True, phys=phys_omni):
         # Model name
-        self.model_name = "tilt_qd_servo_thrust_dist_differential_mdl"
+        self.model_name = "tilt_qd_servo_thrust_mdl"
         self.phys = phys
 
         self.tilt = True
@@ -30,14 +30,15 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         )
         self.include_impedance = False
         self.differential_allocation = True
-        self.actuator_second_order = False
+        self.actuator_second_order = True
+        self.use_nullspace_goal = False
 
         # Read parameters from configuration file in the robot's package
         self.read_params(
             "controller",
             "nmpc",
             "beetle_omni",
-            "BeetleNMPCFullServoThrustDistDiff.yaml",
+            "BeetleNMPCFullServoThrustDistDiffSecondOrder.yaml",
         )
 
         # Create acados model & solver and generate c code
@@ -50,7 +51,13 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
             self.include_cog_dist_model,
         )
 
-    def get_cost_function(self, lin_acc_w=None, ang_acc_b=None, nullspace_proj=None):
+    def get_cost_function(
+        self,
+        lin_acc_w=None,
+        ang_acc_b=None,
+        nullspace_proj=None,
+        nullspace_proj_dot=None,
+    ):
         # fmt: off
         # Cost function
         # see https://docs.acados.org/python_interface/#acados_template.acados_ocp_cost.AcadosOcpCost for details
@@ -68,40 +75,50 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         rot_bt = self._get_rot_wb_ca(self.ee_q[0], self.ee_q[1], self.ee_q[2], self.ee_q[3])
         rot_tb = rot_bt.T
 
+        if self.use_nullspace_goal:
+            # If using nullspace goal, we want to bring our thrusts to thrust_target.
+            # This is 0, but will just reduce the thrust as much as possible without compromising the main control objective, thanks to the nullspace projection.
+            thrust_target = 0.0
+            target_gain = 0.3
+            actuators_target = -target_gain*ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
+            actuator_velocity_y = ca.simplify(ca.vertcat(self.ftd_s, self.ad_s) - ca.mtimes(nullspace_proj, actuators_target))
+        else:
+            # without nullspace goal, just minimize actuator velocity
+            actuator_velocity_y = ca.vertcat(self.ftd_s, self.ad_s)
+
         state_y = ca.vertcat(
-            self.p + rot_wb @ self.ee_p,
-            self.v + rot_wb @ skew_w @ self.ee_p,
+            self.p,# + rot_wb @ self.ee_p,
+            self.v,# + rot_wb @ skew_w @ self.ee_p,
             self.qwr,
             qe_x + self.qxr,
             qe_y + self.qyr,
             qe_z + self.qzr,
-            rot_tb @ self.w,
+            self.w,
             self.a_s,
             self.ft_s,
             self.fu_b_s,
             self.tau_u_b_s,
+            actuator_velocity_y[4:8], # servo angle derivatives
+            actuator_velocity_y[0:4], # thrust derivatives
             self.fds_w,
             self.tau_ds_b,
         )
 
         state_y_e = state_y
 
-        thrust_target = 0.0  # A bit less than hover
-        actuators_target = -ca.vertcat(self.ft_s - thrust_target, 0,0,0,0)  # Target actuator states (bring prop speed to 0)
-        target_gain = 0.6
-        t_rotor = 0.0942  # FIX: do not hardcode Time constant of rotor
-        t_servo = 0.0480  # FIX: do not hardcode Time constant of servo motor
-        time_constant_matrix = ca.diag(ca.vertcat([t_rotor]*4, [t_servo]*4))
-        print("Time constant matrix: \n", time_constant_matrix)
-        # print("Nullspace projector: \n", nullspace_proj)
-
-        # control_y = ca.simplify(target_gain * ca.mtimes(time_constant_matrix, actuators_target)) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s)
-        control_y = ca.simplify(target_gain * ca.mtimes(ca.mtimes(time_constant_matrix, nullspace_proj), actuators_target) - ca.vertcat(self.ft_c - self.ft_s, self.a_c - self.a_s))
-        print("Control y: \n", type(control_y))
-        # control_y = ca.vertcat(
-        #     self.ft_c - self.ft_s,
-        #     self.a_c - self.a_s,
-        # )
+        if self.use_nullspace_goal:
+            time_contant_matrix_inv = ca.diag(ca.vertcat([1/0.0942]*4, [1/0.0480]*4)) # FIX: do not hardcode Time constant of rotor and servo
+            actuators_target_jacobian = ca.jacobian(actuators_target, ca.vertcat(self.ft_s, self.a_s))
+            control_y = ca.simplify(
+                ca.mtimes(time_contant_matrix_inv,ca.vertcat(self.ftd_c - self.ftd_s, self.ad_c - self.ad_s))
+                - ca.mtimes(nullspace_proj_dot,actuators_target)
+                - ca.mtimes(ca.mtimes(nullspace_proj,actuators_target_jacobian), ca.vertcat(self.ftd_s, self.ad_s)) )
+        else:
+            # without nullspace goal, just minimize actuator acceleration
+            control_y = ca.vertcat(
+                self.ftd_c - self.ftd_s,
+                self.ad_c - self.ad_s,
+            )
 
         return state_y, state_y_e, control_y
         # fmt: on
@@ -137,6 +154,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
                 self.params["Qtau"],
                 self.params["Qtau"],
                 self.params["Qtau"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qad"],
+                self.params["Qtd"],
+                self.params["Qtd"],
+                self.params["Qtd"],
+                self.params["Qtd"],
                 0,  # disturbance
                 0,
                 0,
@@ -149,14 +174,14 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
         R = np.diag(
             [
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Rt_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
-                self.params["Ra_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rtd_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
+                self.params["Rad_c"],
             ]
         )
         print("R: \n", R)
@@ -206,10 +231,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         xr[:, 8] = target_qwxyz[2]  # qy
         xr[:, 9] = target_qwxyz[3]  # qz
         # No reference for wx, wy, wz (idx: 10, 11, 12)
-        xr[:, 13] = a_ref[0]  # a1
-        xr[:, 14] = a_ref[1]  # a2
-        xr[:, 15] = a_ref[2]  # a3
-        xr[:, 16] = a_ref[3]  # a4
+        # No reference for servo angles (idx: 13-16)
         xr[:, 17] = ft_ref[0]  # f1
         xr[:, 18] = ft_ref[1]  # f2
         xr[:, 19] = ft_ref[2]  # f3
@@ -225,17 +247,6 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
         # Assemble input reference
         # Note: Reference has to be zero if variable is included as state in cost function!
         ur = np.zeros([nn, nu])
-        # ur[:, 0] = ftd_ref[0]  # f1d
-        # ur[:, 1] = ftd_ref[1]  # f2d
-        # ur[:, 2] = ftd_ref[2]  # f3d
-        # ur[:, 3] = ftd_ref[3]  # f4d
-        # ur[:, 4] = ad_ref[0]  # a1d
-        # ur[:, 5] = ad_ref[1]  # a2d
-        # ur[:, 6] = ad_ref[2]  # a3d
-        # ur[:, 7] = ad_ref[3]  # a4d
-
-        # print("Reference state xr: \n", xr)
-        # print("Target position: ", target_xyz)
 
         return xr, ur
 
