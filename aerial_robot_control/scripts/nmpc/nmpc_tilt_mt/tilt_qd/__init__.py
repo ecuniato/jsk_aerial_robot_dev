@@ -7,6 +7,7 @@ from .tilt_qd_servo_dist import NMPCTiltQdServoDist
 from .tilt_qd_servo_dist_imp import NMPCTiltQdServoImpedance
 from .tilt_qd_servo_thrust_dist import NMPCTiltQdServoThrustDist
 from .tilt_qd_servo_thrust_dist_imp import NMPCTiltQdServoThrustImpedance
+from .tilt_qd_servo_thrust_dist_differential import NMPCTiltQdServoThrustDistDiff
 
 __all__ = [
     "NMPCTiltQdNoServo",
@@ -18,4 +19,5 @@ __all__ = [
     "NMPCTiltQdServoImpedance",
     "NMPCTiltQdServoThrustDist",
     "NMPCTiltQdServoThrustImpedance",
+    "NMPCTiltQdServoThrustDistDiff",
 ]

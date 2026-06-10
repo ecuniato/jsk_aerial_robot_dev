@@ -6,18 +6,19 @@ unset MAKEFLAGS
 # =====
 
 MODELS=(
-#    NMPCFixQdAngvelOut
-#    NMPCFixQdThrustOut
-#    NMPCTiltQdNoServo
-#    NMPCTiltQdServo
-#    NMPCTiltQdServoDist
-#    NMPCTiltQdServoImpedance
-#    NMPCTiltQdServoThrustDist
-#    NMPCTiltQdServoThrustImpedance
-#    NMPCTiltTriServo
-#    NMPCTiltBiServoDist
-#    NMPCTiltBi2OrdServo
-#    MHEWrenchEstAccMom
+    # NMPCFixQdAngvelOut
+    # NMPCFixQdThrustOut
+    # NMPCTiltQdNoServo
+    # NMPCTiltQdServo
+    # NMPCTiltQdServoDist
+    # NMPCTiltQdServoImpedance
+    # NMPCTiltQdServoThrustDist
+    NMPCTiltQdServoThrustDistDiff
+    # NMPCTiltQdServoThrustImpedance
+    # NMPCTiltTriServo
+    # NMPCTiltBiServoDist
+    # NMPCTiltBi2OrdServo
+    # MHEWrenchEstAccMom
 )
 
 for model in "${MODELS[@]}"

@@ -17,7 +17,7 @@ class NMPCTiltQdServoThrustDistDiff(QDNMPCBase):
 
     def __init__(self, build: bool = True, phys=phys_omni):
         # Model name
-        self.model_name = "tilt_qd_servo_thrust_mdl"
+        self.model_name = "tilt_qd_servo_thrust_dist_differential_mdl"
         self.phys = phys
 
         self.tilt = True
