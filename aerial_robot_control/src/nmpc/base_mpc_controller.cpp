@@ -101,7 +101,8 @@ bool BaseMPC::update()
   if (!ctrl_base_ret)
   {
     if (navigator_->getNaviState() == aerial_robot_navigation::ARM_ON_STATE)
-      controlCore(true);  // warmup the solver before actual takeoff
+      // controlCore(true);  // warmup the solver before actual takeoff
+      ; // Warmup causes issues with second oder models due to the u integration
   }
   else
   {

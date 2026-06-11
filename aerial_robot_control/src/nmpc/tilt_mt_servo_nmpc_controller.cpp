@@ -544,10 +544,7 @@ void nmpc::TiltMtServoNMPC::controlCore(bool is_warmup)
   // - thrust
   for (int i = 0; i < motor_num_; i++)
   {
-    if (is_warmup)
-      flight_cmd_.base_thrust[i] = 0.0;  // keep zero thrust during warmup
-    else
-      flight_cmd_.base_thrust[i] = (float)getCommand(i);
+    flight_cmd_.base_thrust[i] = (float)getCommand(i);
   }
 
   // - servo angle
@@ -557,10 +554,7 @@ void nmpc::TiltMtServoNMPC::controlCore(bool is_warmup)
   for (int i = 0; i < joint_num_; i++)
   {
     gimbal_ctrl_cmd_.name.emplace_back("gimbal" + std::to_string(i + 1));
-    if (is_warmup)
-      gimbal_ctrl_cmd_.position.push_back(0.0);  // keep zero angle during warmup
-    else
-      gimbal_ctrl_cmd_.position.push_back(getCommand(motor_num_ + i));
+    gimbal_ctrl_cmd_.position.push_back(getCommand(motor_num_ + i));
   }
 
   // Print control commands for debugging
