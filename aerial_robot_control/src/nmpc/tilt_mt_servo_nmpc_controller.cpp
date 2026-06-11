@@ -523,6 +523,12 @@ void nmpc::TiltMtServoNMPC::controlCore(bool is_warmup)
   /* prepare initial value */
   std::vector<double> bx0 = meas2VecX();
 
+  // Print bx0 for debugging
+  // for (size_t i = 0; i < bx0.size(); ++i)
+  // {
+  //   ROS_INFO_STREAM("bx0[" << i << "] = " << bx0[i]);
+  // }
+
   /* solve */
   try
   {
@@ -550,6 +556,14 @@ void nmpc::TiltMtServoNMPC::controlCore(bool is_warmup)
     gimbal_ctrl_cmd_.name.emplace_back("gimbal" + std::to_string(i + 1));
     gimbal_ctrl_cmd_.position.push_back(getCommand(motor_num_ + i));
   }
+
+  // Print control commands for debugging
+  // for (size_t i = 0; i < flight_cmd_.base_thrust.size(); ++i)
+  // {    ROS_INFO_STREAM("Thrust command for motor "<< i + 1 << ": " << flight_cmd_.base_thrust[i]);
+  // }
+  // for (size_t i = 0; i < gimbal_ctrl_cmd_.position.size(); ++i)
+  // {    ROS_INFO_STREAM("Servo angle command for joint "<< i + 1 << ": " << gimbal_ctrl_cmd_.position[i]); 
+  // }
 }
 
 void nmpc::TiltMtServoNMPC::sendCmd()

@@ -49,8 +49,8 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCCostW()
   getParam<double>(nmpc_nh, "Qad", Qad, 0);
   getParam<double>(nmpc_nh, "Qtd", Qtd, 0);
 
-  getParam<double>(nmpc_nh, "Rtc_d", Rtc_d, 1);
-  getParam<double>(nmpc_nh, "Rac_d", Rac_d, 250);
+  getParam<double>(nmpc_nh, "Rtd_c", Rtc_d, 1);
+  getParam<double>(nmpc_nh, "Rad_c", Rac_d, 250);
 
   // State cost
   mpc_solver_ptr_->setCostWDiagElement(0, Qp_xy);
@@ -461,9 +461,9 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas
   for (int i = 0; i < joint_num_; i++)
   {
     // ==== MODEL ====
-    // double last_servo_angle_c = mpc_solver_ptr_->uo_.at(0).at(i + motor_num_);
-    // double servo_angle_velocity = (last_servo_angle_c - joint_angles_[i]) / t_servo_;
-    // bx0[13 + joint_num_ + motor_num_ + 6 + i] = servo_angle_velocity;
+    double last_servo_angle_c = (double)uo_prev_.at(i + motor_num_);
+    double servo_angle_velocity = (last_servo_angle_c - joint_angles_[i]) / t_servo_;
+    bx0[13 + joint_num_ + motor_num_ + 6 + i] = servo_angle_velocity;
 
     // ==== NUMERICAL DERIVATIVE ====
     // double joint_angle_derivative = (joint_angles_[i] - prev_joint_angles_[i]) / du_;
@@ -471,16 +471,17 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas
     // prev_joint_angles_[i] = joint_angles_[i];
 
     // ==== FILTERED NUMERICAL DERIVATIVE ====
-    auto joint_angle_vel_estimate = 0.7 * prev_joint_angle_vel_estimate_.at(i) + 0.3 * (joint_angles_[i] - prev_joint_angle_.at(i)) / ctrl_loop_du_;
-    prev_joint_angle_.at(i) = joint_angles_[i];
-    prev_joint_angle_vel_estimate_.at(i) = joint_angle_vel_estimate;
+    // auto joint_angle_vel_estimate = 0.9 * prev_joint_angle_vel_estimate_.at(i) + 0.1 * (joint_angles_[i] - prev_joint_angle_.at(i)) * ctrl_loop_du_;
+    // prev_joint_angle_.at(i) = joint_angles_[i];
+    // prev_joint_angle_vel_estimate_.at(i) = joint_angle_vel_estimate;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + i] = prev_joint_angle_vel_estimate_.at(i);
   }
   for (int i = 0; i < motor_num_; i++)
   {
     // ==== MODEL ====
-    // double last_thrust_c = mpc_solver_ptr_->uo_.at(0).at(i);
-    // double thrust_velocity = (last_thrust_c - thrust_meas_[i]) / t_rotor_;
-    // bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = thrust_velocity;
+    double last_thrust_c = (double)uo_prev_.at(i);
+    double thrust_velocity = (last_thrust_c - thrust_meas_[i]) / t_rotor_;
+    bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = thrust_velocity;
 
     // ==== NUMERICAL DERIVATIVE ====
     // double thrust_derivative = (thrust_meas_[i] - prev_thrust_meas_[i]) / du_;
@@ -488,12 +489,13 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas
     // prev_thrust_meas_[i] = thrust_meas_[i];
 
     // ==== FILTERED NUMERICAL DERIVATIVE ====
-    auto thrust_vel_estimate = 0.7 * prev_thrust_vel_estimate_.at(i) + 0.3 * (thrust_meas_[i] - prev_thrust_meas_[i]) / ctrl_loop_du_;
-    prev_thrust_meas_.at(i) = thrust_meas_[i];
-    prev_thrust_vel_estimate_.at(i) = thrust_vel_estimate;
+    // auto thrust_vel_estimate = 0.9 * prev_thrust_vel_estimate_.at(i) + 0.1 * (thrust_meas_[i] - prev_thrust_meas_[i]) * ctrl_loop_du_;
+    // prev_thrust_meas_.at(i) = thrust_meas_[i];
+    // prev_thrust_vel_estimate_.at(i) = thrust_vel_estimate;
+    // bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = prev_thrust_vel_estimate_.at(i);
   }
 
-  // Disturbance as state
+  // Disturbance as state right after the derivative of actuators
   bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 0] = external_force_w.x;
   bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 1] = external_force_w.y;
   bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + motor_num_ + 2] = external_force_w.z;
@@ -529,7 +531,7 @@ double nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::getCommand(int id
   // Integrate control input since it is defined as the servo angle and thrust velocity
   double uo_derivative = mpc_solver_ptr_->uo_.at(0).at(idx_u);
   // RESET?!?! to avoid blindly integrating?
-  double uo = uo_derivative * ctrl_loop_du_ + uo_prev_.at(idx_u);
+  double uo = uo_derivative / ctrl_loop_du_ + uo_prev_.at(idx_u);
   uo_prev_.at(idx_u) = uo;
 
   return uo;
