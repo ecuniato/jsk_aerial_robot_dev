@@ -27,10 +27,10 @@ controller:
     thrust_velocity_max: 100
 
     # Just for safety, pretty much double what the real state limits are.
-    alpha_c_velocity_min: -10  # rad/s
-    alpha_c_velocity_max: 10
-    thrust_c_velocity_min: -200  # N/s
-    thrust_c_velocity_max: 200
+    alpha_c_velocity_min: -5  # rad/s
+    alpha_c_velocity_max: 5
+    thrust_c_velocity_min: -100  # N/s
+    thrust_c_velocity_max: 100
 
     # params for the cost function
     Qp_xy: 300
@@ -39,8 +39,8 @@ controller:
     Qv_z: 10
     Qq_xy: 300
     Qq_z: 600
-    Qw_xy: 5
-    Qw_z: 5
+    Qw_xy: 20
+    Qw_z: 20
     Qa: 0
     Qt: 0.1  # t is for thrust
     Qad: 1
@@ -49,7 +49,7 @@ controller:
     Qtau: 0.01 # generated body torque
 
     Rtd_c: 0.0001  # thrust rate of change
-    Rad_c: 0.001 # arm angular velocity
+    Rad_c: 0.01 # arm angular velocity
 
     is_attitude_ctrl: false
     is_body_rate_ctrl: false
