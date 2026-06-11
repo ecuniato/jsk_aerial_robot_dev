@@ -323,59 +323,59 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::callbackSetRefXU(co
   /* receive info */
   x_u_ref_ = *msg;
 
-  int NN = mpc_solver_ptr_->NN_;
-  int NX = mpc_solver_ptr_->NX_;
-  int NU = mpc_solver_ptr_->NU_;
+  // int NN = mpc_solver_ptr_->NN_;
+  // int NX = mpc_solver_ptr_->NX_;
+  // int NU = mpc_solver_ptr_->NU_;
 
   // ======================== PRINT INFO ========================
-  for (int n = 0; n <= NN; n++)
-  {
-    std::ostringstream x_ss;
-    x_ss << std::fixed << std::setprecision(3);
-    x_ss << "  pos=["    << x_u_ref_.x.data.at(NX*n+0)  << ", " << x_u_ref_.x.data.at(NX*n+1)  << ", " << x_u_ref_.x.data.at(NX*n+2)  << "]"
-        << "  vel=["    << x_u_ref_.x.data.at(NX*n+3)  << ", " << x_u_ref_.x.data.at(NX*n+4)  << ", " << x_u_ref_.x.data.at(NX*n+5)  << "]"
-        << "  quat=["   << x_u_ref_.x.data.at(NX*n+6)  << ", " << x_u_ref_.x.data.at(NX*n+7)  << ", " << x_u_ref_.x.data.at(NX*n+8)  << ", " << x_u_ref_.x.data.at(NX*n+9) << "]"
-        << "  omega=["  << x_u_ref_.x.data.at(NX*n+10) << ", " << x_u_ref_.x.data.at(NX*n+11) << ", " << x_u_ref_.x.data.at(NX*n+12) << "]";
+  // for (int n = 0; n <= NN; n++)
+  // {
+  //   std::ostringstream x_ss;
+  //   x_ss << std::fixed << std::setprecision(3);
+  //   x_ss << "  pos=["    << x_u_ref_.x.data.at(NX*n+0)  << ", " << x_u_ref_.x.data.at(NX*n+1)  << ", " << x_u_ref_.x.data.at(NX*n+2)  << "]"
+  //       << "  vel=["    << x_u_ref_.x.data.at(NX*n+3)  << ", " << x_u_ref_.x.data.at(NX*n+4)  << ", " << x_u_ref_.x.data.at(NX*n+5)  << "]"
+  //       << "  quat=["   << x_u_ref_.x.data.at(NX*n+6)  << ", " << x_u_ref_.x.data.at(NX*n+7)  << ", " << x_u_ref_.x.data.at(NX*n+8)  << ", " << x_u_ref_.x.data.at(NX*n+9) << "]"
+  //       << "  omega=["  << x_u_ref_.x.data.at(NX*n+10) << ", " << x_u_ref_.x.data.at(NX*n+11) << ", " << x_u_ref_.x.data.at(NX*n+12) << "]";
 
-    for (int i = 0; i < joint_num_; i++)
-      x_ss << "  servo_s=[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + i);
+  //   for (int i = 0; i < joint_num_; i++)
+  //     x_ss << "  servo_s=[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + i);
 
-    for (int i = 0; i < motor_num_; i++)
-      x_ss << "  ft_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + joint_num_ + i);
+  //   for (int i = 0; i < motor_num_; i++)
+  //     x_ss << "  ft_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + joint_num_ + i);
 
-    int wrench_off = 13 + joint_num_ + motor_num_;
-    x_ss << "  wrench_s=["
-        << x_u_ref_.x.data.at(NX*n + wrench_off+0) << ", "
-        << x_u_ref_.x.data.at(NX*n + wrench_off+1) << ", "
-        << x_u_ref_.x.data.at(NX*n + wrench_off+2) << ", "
-        << x_u_ref_.x.data.at(NX*n + wrench_off+3) << ", "
-        << x_u_ref_.x.data.at(NX*n + wrench_off+4) << ", "
-        << x_u_ref_.x.data.at(NX*n + wrench_off+5) << "]";
+  //   int wrench_off = 13 + joint_num_ + motor_num_;
+  //   x_ss << "  wrench_s=["
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+0) << ", "
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+1) << ", "
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+2) << ", "
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+3) << ", "
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+4) << ", "
+  //       << x_u_ref_.x.data.at(NX*n + wrench_off+5) << "]";
 
-    int servo_vel_off = wrench_off + 6;
-    for (int i = 0; i < joint_num_; i++)
-      x_ss << "  servo_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + servo_vel_off + i);
+  //   int servo_vel_off = wrench_off + 6;
+  //   for (int i = 0; i < joint_num_; i++)
+  //     x_ss << "  servo_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + servo_vel_off + i);
 
-    int thrust_vel_off = servo_vel_off + joint_num_;
-    for (int i = 0; i < motor_num_; i++)
-      x_ss << "  ft_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + thrust_vel_off + i);
+  //   int thrust_vel_off = servo_vel_off + joint_num_;
+  //   for (int i = 0; i < motor_num_; i++)
+  //     x_ss << "  ft_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + thrust_vel_off + i);
 
-    if (n < NN)
-    {
-      std::ostringstream u_ss;
-      u_ss << std::fixed << std::setprecision(3);
-      for (int i = 0; i < motor_num_; i++)
-        u_ss << "  ft_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + i);
-      for (int i = 0; i < joint_num_; i++)
-        u_ss << "  servo_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + motor_num_ + i);
+  //   if (n < NN)
+  //   {
+  //     std::ostringstream u_ss;
+  //     u_ss << std::fixed << std::setprecision(3);
+  //     for (int i = 0; i < motor_num_; i++)
+  //       u_ss << "  ft_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + i);
+  //     for (int i = 0; i < joint_num_; i++)
+  //       u_ss << "  servo_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + motor_num_ + i);
 
-      ROS_INFO_STREAM("n=" << n << "\n  x:" << x_ss.str() << "\n  u:" << u_ss.str());
-    }
-    else
-    {
-      ROS_INFO_STREAM("n=" << n << " [terminal]\n  x:" << x_ss.str());
-    }
-  }
+  //     ROS_INFO_STREAM("n=" << n << "\n  x:" << x_ss.str() << "\n  u:" << u_ss.str());
+  //   }
+  //   else
+  //   {
+  //     ROS_INFO_STREAM("n=" << n << " [terminal]\n  x:" << x_ss.str());
+  //   }
+  // }
   // ============================================================
 
   // Thrust reference as state reference
@@ -492,7 +492,7 @@ std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas
   {
     // ==== MODEL ====
     double last_thrust_c = (double)uo_prev_.at(i);
-    double thrust_velocity = (last_thrust_c - thrust_meas_[i]) / t_rotor_;
+    double thrust_velocity = (last_thrust_c - thrust_meas_[i] + 0.2) / t_rotor_;  // 0.2 correction factor for model mismatch between thrust command and actual thrust
     bx0[13 + joint_num_ + motor_num_ + 6 + joint_num_ + i] = thrust_velocity;
 
     // ==== NUMERICAL DERIVATIVE ====
