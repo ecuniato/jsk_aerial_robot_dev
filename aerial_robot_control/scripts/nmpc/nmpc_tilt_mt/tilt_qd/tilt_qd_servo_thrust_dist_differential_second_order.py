@@ -66,12 +66,12 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
         q_wt_w, q_wt_x, q_wt_y, q_wt_z = self._quaternion_multiply(self.qw, self.qx, self.qy, self.qz,
                                                                    self.ee_q[0], self.ee_q[1], self.ee_q[2], self.ee_q[3])
 
-        # qe_w, qe_x, qe_y, qe_z = self._quaternion_multiply(self.qwr, -self.qxr, -self.qyr, -self.qzr,
-        #                                                    q_wt_w, q_wt_x, q_wt_y, q_wt_z)
+        qe_w, qe_x, qe_y, qe_z = self._quaternion_multiply(self.qwr, -self.qxr, -self.qyr, -self.qzr,
+                                                           q_wt_w, q_wt_x, q_wt_y, q_wt_z)
 
-        qe_x =  self.qwr * self.qx - self.qw * self.qxr - self.qyr * self.qz + self.qy * self.qzr
-        qe_y =  self.qwr * self.qy - self.qw * self.qyr + self.qxr * self.qz - self.qx * self.qzr
-        qe_z = -self.qxr * self.qy + self.qx * self.qyr + self.qwr * self.qz - self.qw * self.qzr
+        # qe_x =  self.qwr * self.qx - self.qw * self.qxr - self.qyr * self.qz + self.qy * self.qzr
+        # qe_y =  self.qwr * self.qy - self.qw * self.qyr + self.qxr * self.qz - self.qx * self.qzr
+        # qe_z = -self.qxr * self.qy + self.qx * self.qyr + self.qwr * self.qz - self.qw * self.qzr
 
         rot_wb = self._get_rot_wb_ca(self.qw, self.qx, self.qy, self.qz)
         skew_w = self._get_skew_symmetric_matrix(self.w)
@@ -91,14 +91,14 @@ class NMPCTiltQdServoThrustDistDiffSecondOrder(QDNMPCBase):
             actuator_velocity_y = ca.vertcat(self.ftd_s, self.ad_s)
 
         state_y = ca.vertcat(
-            self.p,# + rot_wb @ self.ee_p,
-            self.v,# + rot_wb @ skew_w @ self.ee_p,
+            self.p + rot_wb @ self.ee_p,
+            self.v + rot_wb @ skew_w @ self.ee_p,
             self.qwr,
             qe_x + self.qxr,
             qe_y + self.qyr,
             qe_z + self.qzr,
-            # rot_tb @ self.w,
-            self.w,
+            rot_tb @ self.w,
+            # self.w,
             self.a_s,
             self.ft_s,
             self.fu_b_s,
