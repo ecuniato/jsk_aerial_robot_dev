@@ -60,6 +60,8 @@ protected:
 
   void initNMPCConstraints() override;
 
+  void callbackSetRefXU(const aerial_robot_msgs::PredXUConstPtr& msg) override;
+
   void callbackESCTelem(const spinal::ESCTelemetryArrayConstPtr& msg);
 
   std::vector<double> meas2VecX(bool is_modified_by_traj_frame) override;

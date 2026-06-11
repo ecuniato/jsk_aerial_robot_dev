@@ -1,6 +1,7 @@
 //
 // Created by jinjie on 24/07/31.
 //
+#include <Eigen/Dense>
 
 #include "aerial_robot_control/nmpc/tilt_mt_servo_thrust_dist_differential_second_order_nmpc_controller.h"
 
@@ -66,8 +67,7 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCCostW()
   mpc_solver_ptr_->setCostWDiagElement(11, Qw_xy);
   mpc_solver_ptr_->setCostWDiagElement(12, Qw_z);
   for (int i = 13; i < 13 + joint_num_; ++i)
-    // mpc_solver_ptr_->setCostWDiagElement(i, Qa);
-    mpc_solver_ptr_->setCostWDiagElement(i, 0);  // Should not be penalized, as the reference is unstable and not necessary
+    mpc_solver_ptr_->setCostWDiagElement(i, Qa);
   for (int i = 13 + joint_num_; i < 13 + joint_num_ + motor_num_; ++i)
     mpc_solver_ptr_->setCostWDiagElement(i, Qt);
 
@@ -91,6 +91,13 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCCostW()
     mpc_solver_ptr_->setCostWDiagElement(i, Rtc_d, false);
   for (int i = mpc_solver_ptr_->NX_ + motor_num_; i < mpc_solver_ptr_->NX_ + motor_num_ + joint_num_; ++i)
     mpc_solver_ptr_->setCostWDiagElement(i, Rac_d, false);
+
+  // Print W and WN matrices cleanly
+  Eigen::IOFormat CleanFormat(4, 0, ", ", "\n", "[", "]");
+  ROS_INFO_STREAM("===== Cost matrix W =====");
+  ROS_INFO_STREAM(Eigen::Map<const Eigen::MatrixXd>(mpc_solver_ptr_->W_.data(), mpc_solver_ptr_->NY_, mpc_solver_ptr_->NY_).format(CleanFormat));
+  ROS_INFO_STREAM("===== Cost matrix WN =====");
+  ROS_INFO_STREAM(Eigen::Map<const Eigen::MatrixXd>(mpc_solver_ptr_->WN_.data(), mpc_solver_ptr_->NX_, mpc_solver_ptr_->NX_).format(CleanFormat));
 }
 
 void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCConstraints()
@@ -116,7 +123,6 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::initNMPCConstraints
   getParam<double>(nmpc_nh, "alpha_velocity_min", servo_angle_velocity_min_, -5.0);
   getParam<double>(nmpc_nh, "thrust_velocity_max", thrust_velocity_max_, -100.0);
   getParam<double>(nmpc_nh, "thrust_velocity_min", thrust_velocity_min_, 100.0);
-  
 
   // For control input rate constraints
   getParam<double>(nmpc_nh, "alpha_c_velocity_max", servo_angle_c_velocity_max_, 10.0);
@@ -277,6 +283,149 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::allocateToXU(const 
   x.at(13 + joint_num_ + motor_num_ + 3) = ref_wrench_b(3);
   x.at(13 + joint_num_ + motor_num_ + 4) = ref_wrench_b(4);
   x.at(13 + joint_num_ + motor_num_ + 5) = ref_wrench_b(5);
+
+  // Zero-out control input since control input is thrust and servo derivative
+  for (int i = 0; i < motor_num_ + joint_num_; i++)
+  {
+    u.at(i) = 0.0;
+  }
+}
+
+void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::callbackSetRefXU(const aerial_robot_msgs::PredXUConstPtr& msg)
+{
+  /* failsafe check */
+  if (navigator_->getNaviState() != aerial_robot_navigation::HOVER_STATE)
+  {
+    ROS_WARN_THROTTLE(1, "The robot has not hovered, so the reference trajectory will be ignored!");
+    return;
+  }
+
+  /* switch tracking mode */
+  if (!is_traj_tracking_)
+  {
+    is_traj_tracking_ = true;
+    traj_child_frame_id_ = msg->child_frame_id;
+    ROS_INFO_STREAM("Trajectory tracking mode is on! The child frame is set to " << traj_child_frame_id_ << ".");
+  }
+
+  /* receive info */
+  x_u_ref_ = *msg;
+
+  int NN = mpc_solver_ptr_->NN_;
+  int NX = mpc_solver_ptr_->NX_;
+  int NU = mpc_solver_ptr_->NU_;
+
+  // ======================== PRINT INFO ========================
+  for (int n = 0; n <= NN; n++)
+  {
+    std::ostringstream x_ss;
+    x_ss << std::fixed << std::setprecision(3);
+    x_ss << "  pos=["    << x_u_ref_.x.data.at(NX*n+0)  << ", " << x_u_ref_.x.data.at(NX*n+1)  << ", " << x_u_ref_.x.data.at(NX*n+2)  << "]"
+        << "  vel=["    << x_u_ref_.x.data.at(NX*n+3)  << ", " << x_u_ref_.x.data.at(NX*n+4)  << ", " << x_u_ref_.x.data.at(NX*n+5)  << "]"
+        << "  quat=["   << x_u_ref_.x.data.at(NX*n+6)  << ", " << x_u_ref_.x.data.at(NX*n+7)  << ", " << x_u_ref_.x.data.at(NX*n+8)  << ", " << x_u_ref_.x.data.at(NX*n+9) << "]"
+        << "  omega=["  << x_u_ref_.x.data.at(NX*n+10) << ", " << x_u_ref_.x.data.at(NX*n+11) << ", " << x_u_ref_.x.data.at(NX*n+12) << "]";
+
+    for (int i = 0; i < joint_num_; i++)
+      x_ss << "  servo_s=[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + i);
+
+    for (int i = 0; i < motor_num_; i++)
+      x_ss << "  ft_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + 13 + joint_num_ + i);
+
+    int wrench_off = 13 + joint_num_ + motor_num_;
+    x_ss << "  wrench_s=["
+        << x_u_ref_.x.data.at(NX*n + wrench_off+0) << ", "
+        << x_u_ref_.x.data.at(NX*n + wrench_off+1) << ", "
+        << x_u_ref_.x.data.at(NX*n + wrench_off+2) << ", "
+        << x_u_ref_.x.data.at(NX*n + wrench_off+3) << ", "
+        << x_u_ref_.x.data.at(NX*n + wrench_off+4) << ", "
+        << x_u_ref_.x.data.at(NX*n + wrench_off+5) << "]";
+
+    int servo_vel_off = wrench_off + 6;
+    for (int i = 0; i < joint_num_; i++)
+      x_ss << "  servo_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + servo_vel_off + i);
+
+    int thrust_vel_off = servo_vel_off + joint_num_;
+    for (int i = 0; i < motor_num_; i++)
+      x_ss << "  ft_vel_s[" << i << "]=" << x_u_ref_.x.data.at(NX*n + thrust_vel_off + i);
+
+    if (n < NN)
+    {
+      std::ostringstream u_ss;
+      u_ss << std::fixed << std::setprecision(3);
+      for (int i = 0; i < motor_num_; i++)
+        u_ss << "  ft_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + i);
+      for (int i = 0; i < joint_num_; i++)
+        u_ss << "  servo_cmd[" << i << "]=" << x_u_ref_.u.data.at(NU*n + motor_num_ + i);
+
+      ROS_INFO_STREAM("n=" << n << "\n  x:" << x_ss.str() << "\n  u:" << u_ss.str());
+    }
+    else
+    {
+      ROS_INFO_STREAM("n=" << n << " [terminal]\n  x:" << x_ss.str());
+    }
+  }
+  // ============================================================
+
+  // Thrust reference as state reference
+  // for (int n = 0; n <= NN; n++)
+  // {
+  //   for (int i = 0; i < motor_num_; i++)
+  //   {
+  //     if (n < NN)
+  //     {
+  //       x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + i) = x_u_ref_.u.data.at(NU * n + i);
+  //     }
+  //     else
+  //     {
+  //       x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + i) = x_u_ref_.u.data.at(NU * (NN - 1) + i);
+  //     }
+  //   }
+  // }
+  // // Assemble wrench state reference
+  // for (int n = 0; n <= NN; n++)
+  // {
+  //   Eigen::VectorXd z(2 * motor_num_);  // stacked vector of [ft*sin(alpha); ft*cos(alpha)] per motor
+  //   for (int i = 0; i < motor_num_; i++)
+  //   {
+  //     double alpha = x_u_ref_.x.data.at(NX * n + 13 + i);
+  //     double ft    = x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + i);  // Thrust ref copied from control reference
+  //     z(2 * i)     = ft * std::sin(alpha);
+  //     z(2 * i + 1) = ft * std::cos(alpha);
+  //   }
+  //   Eigen::VectorXd wrench_b_ref = alloc_mat_ * z;
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 0) = wrench_b_ref(0);
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 1) = wrench_b_ref(1);
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 2) = wrench_b_ref(2);
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 3) = wrench_b_ref(3);
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 4) = wrench_b_ref(4);
+  //   x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 5) = wrench_b_ref(5);
+  // }
+
+  // // Zero-out servo and thrust velocities
+  // for (int n = 0; n <= NN; n++)
+  // {
+  //   for (int i = 0; i < joint_num_; i++)
+  //   {
+  //     x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 6 + i) = 0.0;
+  //   }
+  //   for (int i = 0; i < motor_num_; i++)
+  //   {
+  //     x_u_ref_.x.data.at(NX * n + 13 + joint_num_ + motor_num_ + 6 + joint_num_ + i) = 0.0;
+  //   }
+  // }
+
+  // // Zero-out control reference since control input is thrust and servo derivative
+  // for (int n = 0; n < NN; n++)
+  // {
+  //   for (int i = 0; i < motor_num_ + joint_num_; i++)
+  //   {
+  //     x_u_ref_.u.data.at(NU * n + i) = 0.0;
+  //   }
+  // }
+
+  /* set reference */
+  rosXU2VecXU(x_u_ref_, mpc_solver_ptr_->xr_, mpc_solver_ptr_->ur_);
+  mpc_solver_ptr_->setReference(mpc_solver_ptr_->xr_, mpc_solver_ptr_->ur_, true);
 }
 
 std::vector<double> nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::meas2VecX(bool is_modified_by_traj_frame)
