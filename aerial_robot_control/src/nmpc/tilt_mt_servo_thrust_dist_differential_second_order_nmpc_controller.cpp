@@ -284,6 +284,18 @@ void nmpc::TiltMtServoThrustDistDifferentialSecondOrderNMPC::allocateToXU(const 
   x.at(13 + joint_num_ + motor_num_ + 4) = ref_wrench_b(4);
   x.at(13 + joint_num_ + motor_num_ + 5) = ref_wrench_b(5);
 
+  // Servo angle velocity reference
+  for (int i = 0; i < joint_num_; i++)
+  {
+    x.at(13 + joint_num_ + motor_num_ + 6 + i) = - 0.5*std::sin(joint_angles_[i]);
+  }
+
+  // Thrust velocity
+  for (int i = 0; i < motor_num_; i++)
+  {
+    x.at(13 + joint_num_ + motor_num_ + 6 + joint_num_ + i) = 0.0;
+  }
+
   // Zero-out control input since control input is thrust and servo derivative
   for (int i = 0; i < motor_num_ + joint_num_; i++)
   {
